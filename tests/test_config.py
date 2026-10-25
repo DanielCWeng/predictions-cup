@@ -33,6 +33,8 @@ def clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "MAKER_DEEP_LADDER_LEVEL_OFFSETS",
         "MAKER_DEEP_LADDER_LEVEL_SIZES",
         "MAKER_DEEP_LADDER_POSITION_CAP",
+        "MAKER_DEEP_LADDER_REDUCE_IMPROVE_TICKS",
+        "MAKER_DEEP_LADDER_REDUCE_IMPROVE_EXCHANGE_IDS",
         "RESIDUAL_TAKER_THRESHOLD",
         "RESIDUAL_TAKER_PM_SPREAD_CAP",
         "RESIDUAL_TAKER_MIN_PM_DEPTH",
@@ -74,6 +76,8 @@ def test_defaults_load_without_credentials(
     assert settings.maker_deep_ladder_level_offsets == (0.01, 0.02, 0.04)
     assert settings.maker_deep_ladder_level_sizes == (50, 100, 150)
     assert settings.maker_deep_ladder_position_cap == 200
+    assert settings.maker_deep_ladder_reduce_improve_ticks == 0
+    assert settings.maker_deep_ladder_reduce_improve_exchange_ids == ""
     assert settings.residual_taker_threshold == 0.02
     assert settings.residual_taker_pm_spread_cap == 0.02
     assert settings.residual_taker_min_pm_depth == 50.0
@@ -131,6 +135,8 @@ def test_deep_ladder_configuration_loads(
     monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_LEVEL_OFFSETS", "[0.01,0.02,0.04]")
     monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_LEVEL_SIZES", "[25,50,100]")
     monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_POSITION_CAP", "175")
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_REDUCE_IMPROVE_TICKS", "1")
+    monkeypatch.setenv("PREDICTIONS_CUP_MAKER_DEEP_LADDER_REDUCE_IMPROVE_EXCHANGE_IDS", "36,37")
 
     settings = AppSettings()
 
@@ -138,6 +144,8 @@ def test_deep_ladder_configuration_loads(
     assert settings.maker_deep_ladder_level_offsets == (0.01, 0.02, 0.04)
     assert settings.maker_deep_ladder_level_sizes == (25, 50, 100)
     assert settings.maker_deep_ladder_position_cap == 175
+    assert settings.maker_deep_ladder_reduce_improve_ticks == 1
+    assert settings.maker_deep_ladder_reduce_improve_exchange_ids == "36,37"
 
 
 def test_maker_freshness_defaults_cover_sig_refresh_intervals(

@@ -278,6 +278,8 @@ def _engine(
     fill_seeking_min_edge: float = 0.02,
     deep_ladder_enabled: bool = False,
     deep_ladder_position_cap: int = 200,
+    deep_ladder_reduce_improve_ticks: int = 0,
+    deep_ladder_reduce_improve_exchange_ids: frozenset[str] = frozenset(),
 ) -> MakerEngine:
     provider = DirectPolymarketFairValueProvider(
         _mapping(
@@ -308,6 +310,8 @@ def _engine(
             fill_seeking_min_edge=fill_seeking_min_edge,
             deep_ladder_enabled=deep_ladder_enabled,
             deep_ladder_position_cap=deep_ladder_position_cap,
+            deep_ladder_reduce_improve_ticks=deep_ladder_reduce_improve_ticks,
+            deep_ladder_reduce_improve_exchange_ids=deep_ladder_reduce_improve_exchange_ids,
         ),
         market_token_ids={"36": "token-yes"},
     )
@@ -732,15 +736,14 @@ def test_cancel_recovery_timeout_keeps_uncertainty_and_allows_worker_progress(
     adapter.set_cancel_uncertainty_resolver(stalled_recovery)
     try:
         with pytest.raises(SigExecutionUncertainError):
-            asyncio.run(adapter.cancel(
-                _active(QuoteSide.BID, ticks=99, order_id=91),
-                "cancel-op", TOURNAMENT
-            ))
+            asyncio.run(
+                adapter.cancel(
+                    _active(QuoteSide.BID, ticks=99, order_id=91), "cancel-op", TOURNAMENT
+                )
+            )
         assert live.cancel_calls == 2
         assert journal.lifecycle_state("cancel-op") is LifecycleState.UNCERTAIN
-        assert tuple(item.logical_operation_id for item in journal.unresolved()) == (
-            "cancel-op",
-        )
+        assert tuple(item.logical_operation_id for item in journal.unresolved()) == ("cancel-op",)
     finally:
         journal.close()
 
@@ -2983,7 +2986,8 @@ def test_full_gross_maker_filters_two_sided_quote_to_strict_reduction(
     assert risk.intents[0].outcome_side is OutcomeSide.YES
     assert 0 < risk.intents[0].quantity <= abs(signed_inventory)
     submitted = tuple(
-        action for action in result.lifecycle_actions
+        action
+        for action in result.lifecycle_actions
         if action.kind is QuoteLifecycleActionKind.PLACE
     )
     assert len(submitted) == 1
@@ -3038,6 +3042,7 @@ def test_full_gross_maker_refuses_two_sided_quote_on_wrong_signed_ledger() -> No
     assert result.risk_decisions[0].reason == "max_gross_exposure"
     assert not result.execution_events
 
+
 def test_live_bulk_price_refresh_has_headroom_inside_configured_bbo_age() -> None:
     from predictions_cup.maker.service import _maker_bulk_price_refresh_seconds
 
@@ -3045,3 +3050,128 @@ def test_live_bulk_price_refresh_has_headroom_inside_configured_bbo_age() -> Non
     assert _maker_bulk_price_refresh_seconds(5.0) == 10.0
     assert _maker_bulk_price_refresh_seconds(14.0) == 14.0
     assert _maker_bulk_price_refresh_seconds(20.0) == 20.0
+
+
+def test_deep_ladder_inventory_reduction_improves_one_tick_only() -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=120.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+    base = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(snapshot)
+    improved = _engine(
+        max_inventory=200.0,
+        deep_ladder_enabled=True,
+        deep_ladder_reduce_improve_ticks=1,
+    ).quote(snapshot)
+    assert base.desired is not None and improved.desired is not None
+    assert improved.desired.ask_levels[0].price_ticks == base.desired.ask_levels[0].price_ticks - 1
+    assert improved.desired.ask_levels[0].price_ticks >= 91
+    assert improved.desired.ask_levels[0].price_ticks * 0.005 >= 0.52 + 0.01
+    assert improved.desired.bid_levels == base.desired.bid_levels
+    assert [level.size for level in improved.desired.ask_levels] == [
+        level.size for level in base.desired.ask_levels
+    ]
+
+    short = _maker_snapshot(
+        signed_inventory=-120.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    short = replace(short, runtime=replace(short.runtime, books=(book,)))
+    short_base = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(short)
+    short_better = _engine(
+        max_inventory=200.0,
+        deep_ladder_enabled=True,
+        deep_ladder_reduce_improve_ticks=1,
+    ).quote(short)
+    assert short_base.desired is not None and short_better.desired is not None
+    assert (
+        short_better.desired.bid_levels[0].price_ticks
+        == short_base.desired.bid_levels[0].price_ticks + 1
+    )
+    assert short_better.desired.bid_levels[0].price_ticks * 0.005 <= 0.48 - 0.01
+    assert short_better.desired.ask_levels == short_base.desired.ask_levels
+
+
+def test_deep_ladder_reduction_improvement_never_loses_external_cushion() -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=120.0,
+        external={"token-yes": _external(bid=0.48, ask=0.545)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+    a = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(snapshot)
+    b = _engine(
+        max_inventory=200.0,
+        deep_ladder_enabled=True,
+        deep_ladder_reduce_improve_ticks=1,
+    ).quote(snapshot)
+    assert a.desired is not None and b.desired is not None
+    assert b.desired.ask_levels == a.desired.ask_levels
+
+    flat = _maker_snapshot(external={"token-yes": _external(bid=0.48, ask=0.52)})
+    flat = replace(flat, runtime=replace(flat.runtime, books=(book,)))
+    unchanged = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(flat)
+    attempted = _engine(
+        max_inventory=200.0,
+        deep_ladder_enabled=True,
+        deep_ladder_reduce_improve_ticks=1,
+    ).quote(flat)
+    assert unchanged.desired == attempted.desired
+
+
+def test_deep_ladder_reduction_improvement_rejects_invalid_values() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="0 or 1 tick"):
+        MakerConfig(deep_ladder_reduce_improve_ticks=2)
+
+
+def test_deep_ladder_canary_scope_keeps_other_exchanges_unchanged() -> None:
+    snapshot = _maker_snapshot(
+        signed_inventory=120.0,
+        external={"token-yes": _external(bid=0.48, ask=0.52)},
+    )
+    book = RuntimeBook(
+        exchange_id="36",
+        market_id="m1",
+        tournament_id=TOURNAMENT,
+        bids=(RuntimeLevel(price_ticks=90, quantity=20.0),),
+        asks=(RuntimeLevel(price_ticks=110, quantity=20.0),),
+        trusted_depth=True,
+        observed_monotonic_ns=NOW,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, books=(book,)))
+    control = _engine(max_inventory=200.0, deep_ladder_enabled=True).quote(snapshot)
+    out_scope = _engine(
+        max_inventory=200.0,
+        deep_ladder_enabled=True,
+        deep_ladder_reduce_improve_ticks=1,
+        deep_ladder_reduce_improve_exchange_ids=frozenset({"other"}),
+    ).quote(snapshot)
+    in_scope = _engine(
+        max_inventory=200.0,
+        deep_ladder_enabled=True,
+        deep_ladder_reduce_improve_ticks=1,
+        deep_ladder_reduce_improve_exchange_ids=frozenset({"36"}),
+    ).quote(snapshot)
+    assert control.desired == out_scope.desired
+    assert in_scope.desired is not None and control.desired is not None
+    assert in_scope.desired.ask_ticks == control.desired.ask_ticks - 1
