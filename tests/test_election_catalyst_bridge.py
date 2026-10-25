@@ -23,7 +23,7 @@ def test_reducible_shares_derive_from_worst_case_signed_inventory():
 
 def test_bbo_staleness_does_not_become_trusted():
     snap = _snapshot()
-    old = replace(snap, sig_bbo_observed_ns=NOW-16_000_000_000)
+    old = replace(snap, now_monotonic_ns=NOW+20_000_000_000, sig_bbo_observed_ns=NOW)
     view = market_view_from_snapshot(old, ExecutionReservationBook(), "BUY")
     assert not view.bbo_trusted
 
