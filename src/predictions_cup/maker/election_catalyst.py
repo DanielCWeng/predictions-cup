@@ -250,5 +250,5 @@ class CatalystWakeHandoff:
         self.forwarded = 0
 
     def forward(self, candidate: QualifiedCatalyst) -> None:
-        self._notify((candidate.exchange_id,), candidate.decision_monotonic_ns)
+        self._notify((candidate.exchange_id,), observed_monotonic_ns=candidate.decision_monotonic_ns)
         self.forwarded += 1
