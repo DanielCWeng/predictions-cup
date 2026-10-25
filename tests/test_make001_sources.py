@@ -94,7 +94,9 @@ def test_bridge_build_many_reuses_one_portfolio_per_cycle_and_refreshes_next_cyc
     wall_now = datetime(2026, 9, 29, 14, 0, tzinfo=UTC)
     observed = wall_now - timedelta(milliseconds=5)
     records = tuple(
-        _mapping().records[0].model_copy(update={"sig_exchange_id": str(i), "sig_market_id": f"m{i}"})
+        _mapping().records[0].model_copy(
+            update={"sig_exchange_id": str(i), "sig_market_id": f"m{i}"}
+        )
         for i in range(36, 112)
     )
     sig = _SigState(
