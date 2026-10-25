@@ -69,9 +69,9 @@ from predictions_cup.models.registry import default_model_registry
 from predictions_cup.models.runtime import LiveModelCoordinator, ModelRuntime
 from predictions_cup.observe import (
     BoundedObservationEmitter,
-    NullObservationEmitter,
     CaptureObservationSink,
     CompetitionContextSampler,
+    NullObservationEmitter,
     ObservationHealthProvider,
     ObservationHealthSnapshot,
     ObservationHealthStatusPublisher,
