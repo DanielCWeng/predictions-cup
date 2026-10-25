@@ -53,7 +53,7 @@ def load_manifest(path: Path) -> dict[str, Any]:
     action = data.get("action")
     if action not in {
         "auth_check", "run", "status", "output", "logs", "dataset_files", "dataset_probe",
-        "dataset_fetch", "dataset_analysis", "artifact_analysis"
+        "dataset_fetch", "dataset_analysis", "artifact_analysis", "archive_start", "archive_commit"
     }:
         raise ValueError(f"Unsupported action: {action!r}")
     return data
@@ -542,6 +542,82 @@ def run_kernel(data: dict[str, Any], output_dir: Path) -> None:
     )
 
 
+
+def archive_start(data: dict[str, Any], output_dir: Path) -> None:
+    """Stage a single upload through Kaggle's resumable blob endpoint.
+
+    The resulting URL authorises upload of this one blob, never account API calls.
+    Kaggle account credentials remain only in GitHub Actions.
+    """
+    from kaggle.api.kaggle_api_extended import KaggleApi
+    from kagglesdk.blobs.types.blob_api_service import ApiBlobType, ApiStartBlobUploadRequest
+
+    name = str(data["filename"])
+    size = int(data["size_bytes"])
+    if "/" in name or "\\" in name or not (0 < size <= 8_000_000_000):
+        raise ValueError("Invalid archive file or size")
+    api = KaggleApi()
+    api.authenticate()
+    req = ApiStartBlobUploadRequest()
+    req.type = ApiBlobType.DATASET
+    req.name = name
+    req.content_length = size
+    req.content_type = "application/octet-stream"
+    with api.build_kaggle_client() as client:
+        response = client.blobs.blob_api_client.start_blob_upload(req)
+    if not response.create_url.startswith("https://") or not response.token:
+        raise RuntimeError("Invalid signed Kaggle blob-upload session")
+    session = {
+        "name": name,
+        "size_bytes": size,
+        "sha256": str(data["sha256"]),
+        "create_url": response.create_url,
+        "blob_token": response.token,
+    }
+    (output_dir / "upload_session.json").write_text(
+        json.dumps(session, indent=2) + "\n", encoding="utf-8"
+    )
+    # Temporary one-blob upload URL; not the GitHub secret or Kaggle API token.
+    print("ARCHIVE_UPLOAD_SESSION_JSON=" + json.dumps(session, separators=(",", ":")))
+
+
+def archive_commit(data: dict[str, Any], output_dir: Path) -> None:
+    """Publish uploaded remote blob references as a PRIVATE Kaggle dataset."""
+    from kaggle.api.kaggle_api_extended import KaggleApi
+    from kagglesdk.datasets.types.dataset_api_service import ApiCreateDatasetRequest, ApiDatasetNewFile
+
+    ref = str(data["dataset_ref"])
+    owner, slug = ref.split("/", 1)
+    if owner != "polyleviathan" or not slug.startswith("sig-trading-cup-research"):
+        raise ValueError("Unexpected archive dataset target")
+    files = data["files"]
+    if not files or len(files) > 100:
+        raise ValueError("Invalid staged blob count")
+    req = ApiCreateDatasetRequest()
+    req.title = "SIG Cup Historical Research Archive"
+    req.slug = slug
+    req.owner_slug = owner
+    req.license_name = "other"
+    req.description = "Private historical SIG Cup research archive; excludes live risk and execution databases."
+    req.is_private = True
+    req.files = []
+    for item in files:
+        f = ApiDatasetNewFile()
+        f.token = str(item["blob_token"])
+        req.files.append(f)
+    api = KaggleApi()
+    api.authenticate()
+    with api.build_kaggle_client() as client:
+        result = client.datasets.dataset_api_client.create_dataset(req)
+    if result.error:
+        raise RuntimeError("Kaggle dataset create reported error: " + str(result.error))
+    print("PRIVATE_DATASET_RESULT=" + json.dumps({"dataset":ref,"status":result.status}))
+    (output_dir / "archive_commit.json").write_text(
+        json.dumps({"dataset":ref,"status":result.status,"private":True}) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", required=True)
@@ -587,6 +663,10 @@ def main() -> int:
         dataset_analysis(data, output_dir)
     elif action == "artifact_analysis":
         artifact_analysis(data, output_dir)
+    elif action == "archive_start":
+        archive_start(data, output_dir)
+    elif action == "archive_commit":
+        archive_commit(data, output_dir)
 
     return 0
 
