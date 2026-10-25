@@ -40,6 +40,7 @@ def _exercise_early_startup(
         MakerService, "_tournament_context", lambda self: ("offline-cup", "offline-cup"),
     )
     monkeypatch.setattr(service_module, "build_rest_governor", lambda settings: object())
+    monkeypatch.setattr(service_module, "build_write_governor", lambda settings: object())
     monkeypatch.setattr(
         service_module, "GovernedSigRestClient", lambda *args, **kwargs: object(),
     )
