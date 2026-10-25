@@ -1,6 +1,0 @@
-{
-  "schema_version": 1,
-  "action": "credential_relay",
-  "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAiTfwKBybNjXut8pA+sCn\nsznIQFyBgSUuh7zBcLZbYlDhY6uvWocWOkXan1AhEyYlPfiSwIilzPtUI159uiQu\nhOb33u38DXlTshm+LCLvnk8giJJEFNCudWVEsitICg0/d2+7ECnR2kCLNDrD5ZG9\nvXDsyvtFjGTinNif9itW8dK9/JhMXNaY/1ykrAmiGd/L0eW3Ic6zoqT4Yv4tbKos\nSzUCfaGsC45zvw0y2d2WiQ0AnWOP5XmYbrVpCBXVAhTDgeNd7R0QeTYiBH7f1/nJ\nE8zQZ5mVM6sEGuT9lI6ksuUZScQOWM/SFHD58/3P5tKhhhJVuPO8n5I7uyVeJ4C1\nxlY9XajJJ7C28H1na/9MPKbDcwvbpkfVtb3BZL+btZAwQ2vWbozFNGOE9ghe8Eea\nYXRU+1Jis2DJ6JKX6hn33MKnXBtfwF2aI9ltK6deHpTdXXRqGzfIGi2QarWk8HLg\nd9BCS0zWQOVYm8CXtwBWThI1Z1x7tv/C4v1OqHvRuMrBAgMBAAE=\n-----END PUBLIC KEY-----\n",
-  "public_key_sha256": "5f8c34a49ed726137dbade189ca7536ab09e846c6beb96fc18b5904381121545"
-}
