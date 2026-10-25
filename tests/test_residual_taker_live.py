@@ -254,6 +254,17 @@ def test_no_signal_inside_threshold() -> None:
     harness = _Harness()
     harness.run(_snapshot(bid=147, ask=148))
     assert harness.plans == []
+    assert harness.coordinator._no_residual_markets == 1
+    assert harness.coordinator._candidate_ready_markets == 0
+
+
+def test_price_prefilter_preserves_near_threshold_signal() -> None:
+    harness = _Harness()
+    # Floating-point prices must use the same tick arithmetic as the signal.
+    harness.run(_snapshot(bid=139, ask=140, pm_bid=0.716, pm_ask=0.726))
+    assert len(harness.plans) == 1
+    assert harness.coordinator._no_residual_markets == 0
+    assert harness.coordinator._candidate_ready_markets == 1
 
 
 def test_risk_denial_and_kill_switch_place_nothing() -> None:
@@ -564,7 +575,7 @@ def test_taker_liveness_recheck_logs_completed_evaluation(
     asyncio.run(harness.coordinator.run_liveness(stop_event=stop_event, recheck=recheck))
 
     assert harness.coordinator.evaluation_cycles == 2
-    assert "TAKE heartbeat evaluated=1 input_ready=1 signals=1 attempts=1 cycles=1 skipped={}" in caplog.text
+    assert "TAKE heartbeat evaluated=1 candidate_ready=1 no_residual=0 signals=1 attempts=1 cycles=1 skipped={}" in caplog.text
 
 
 def test_taker_liveness_recovers_from_one_slow_evaluation(
@@ -615,7 +626,7 @@ def test_taker_liveness_fails_loudly_when_recheck_never_evaluates(
             )
         )
 
-    assert "TAKE liveness stalled evaluated=0 input_ready=0 signals=0 cycles=0" in caplog.text
+    assert "TAKE liveness stalled evaluated=0 candidate_ready=0 signals=0 cycles=0" in caplog.text
 
 
 def test_economics_gate_passes_depth_qualified_buy_through_same_risk_engine() -> None:

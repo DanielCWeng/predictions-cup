@@ -38,6 +38,7 @@ from predictions_cup.maker.residual_taker import (
     THRESHOLD,
     ResidualSignal,
     ResidualTakerSignal,
+    SIG_TICK_PROBABILITY,
     residual_input_from_snapshot,
 )
 from predictions_cup.maker.safety import MakerKillSwitch
@@ -137,7 +138,8 @@ class ResidualTakerLiveCoordinator:
         self._pending_cancels: dict[str, ExecutionEnvelope] = {}
         self._evaluation_cycles = 0
         self._evaluated_markets = 0
-        self._input_ready_markets = 0
+        self._candidate_ready_markets = 0
+        self._no_residual_markets = 0
         self._signals = 0
         self._attempted_orders = 0
         self._skipped_signals: Counter[str] = Counter()
@@ -161,9 +163,10 @@ class ResidualTakerLiveCoordinator:
 
     def log_heartbeat(self) -> None:
         _LOG.info(
-            "TAKE heartbeat evaluated=%d input_ready=%d signals=%d attempts=%d cycles=%d skipped=%s",
+            "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d signals=%d attempts=%d cycles=%d skipped=%s",
             self._evaluated_markets,
-            self._input_ready_markets,
+            self._candidate_ready_markets,
+            self._no_residual_markets,
             self._signals,
             self._attempted_orders,
             self._evaluation_cycles,
@@ -210,9 +213,9 @@ class ResidualTakerLiveCoordinator:
                         _LOG.warning("TAKE liveness delayed; forcing one bounded recheck")
                         continue
                     _LOG.critical(
-                        "TAKE liveness stalled evaluated=%d input_ready=%d signals=%d cycles=%d",
+                        "TAKE liveness stalled evaluated=%d candidate_ready=%d signals=%d cycles=%d",
                         self._evaluated_markets,
-                        self._input_ready_markets,
+                        self._candidate_ready_markets,
                         self._signals,
                         self._evaluation_cycles,
                     )
@@ -230,13 +233,43 @@ class ResidualTakerLiveCoordinator:
             retried = await self._try_cancel(operation_id, envelope)
             if retried is not None:
                 events.append(retried)
-        for exchange_id in sorted(snapshots):
+        # The LIVE bridge normally delivers one changed market per cycle.
+        # Avoid allocating a sorted list in that overwhelmingly common case.
+        exchange_ids = snapshots if len(snapshots) < 2 else sorted(snapshots)
+        for exchange_id in exchange_ids:
             if self._kill_switch.active:
                 break
             if exchange_id not in self._signal.tracked_exchange_ids:
                 continue
             self._evaluated_markets += 1
             snapshot = snapshots[exchange_id]
+            record = self._mapping.get(exchange_id)
+            # Most updates have no executable PM/SIG price residual. Reject
+            # that common case using only touch prices, before allocating a
+            # signal input or checking ancillary feed/portfolio state. All
+            # candidates still pass the original full fail-closed validation.
+            if record is not None and record.direct_polymarket is not None:
+                quote = snapshot.external_quotes.get(
+                    record.direct_polymarket.mapped_token_id
+                )
+                book = snapshot.runtime.book(exchange_id)
+                if (
+                    quote is not None
+                    and quote.best_bid is not None
+                    and quote.best_ask is not None
+                    and book is not None
+                    and book.bids
+                    and book.asks
+                ):
+                    pm_mid = (quote.best_bid + quote.best_ask) / 2.0
+                    if (
+                        book.asks[0].price_ticks * SIG_TICK_PROBABILITY
+                        > pm_mid - self._threshold
+                        and book.bids[0].price_ticks * SIG_TICK_PROBABILITY
+                        < pm_mid + self._threshold
+                    ):
+                        self._no_residual_markets += 1
+                        continue
             sig_bbo_age = snapshot.now_monotonic_ns - snapshot.sig_bbo_observed_ns
             bbo_proxy = (
                 not snapshot.sig_bbo_trusted
@@ -245,7 +278,7 @@ class ResidualTakerLiveCoordinator:
             )
             state = residual_input_from_snapshot(
                 snapshot,
-                self._mapping.get(exchange_id),
+                record,
                 max_pm_book_age_ns=self._max_pm_book_age_ns,
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
                 allow_bbo_proxy=self._allow_bbo_proxy,
@@ -253,7 +286,7 @@ class ResidualTakerLiveCoordinator:
             )
             if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
-            self._input_ready_markets += 1
+            self._candidate_ready_markets += 1
             signal = self._signal.on_state(state, commit_cooldown=False)
             if signal is None:
                 continue
