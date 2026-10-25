@@ -127,6 +127,7 @@ def test_maker_research_off_skips_optional_capture_initialization(
     maker.core = cast(MakerRuntimeComponents, StopBeforeTrading())
     monkeypatch.setattr(MakerService, "_tournament_context", lambda self: ("offline", "offline"))
     monkeypatch.setattr(maker_module, "build_rest_governor", lambda settings: object())
+    monkeypatch.setattr(maker_module, "build_write_governor", lambda settings: object())
     monkeypatch.setattr(
         maker_module, "GovernedSigRestClient", lambda *args, **kwargs: object(),
     )
