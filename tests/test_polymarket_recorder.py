@@ -34,6 +34,7 @@ def test_supervised_recorder_fails_closed_without_explicit_universe(
 ) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("PREDICTIONS_CUP_POLYMARKET_CAPTURE_ENABLED", "true")
+    monkeypatch.setenv("PREDICTIONS_CUP_RESEARCH_COLLECTION_ENABLED", "true")
     monkeypatch.delenv("PREDICTIONS_CUP_POLYMARKET_SUPERVISED_IDS", raising=False)
 
     assert main(["--runtime-env-only", "--require-explicit-universe"]) == 2
