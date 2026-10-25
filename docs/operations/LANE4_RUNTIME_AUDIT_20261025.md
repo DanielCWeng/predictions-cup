@@ -15,7 +15,7 @@
 | IO PSI some/10s | 5.74% | 6.45% | 0% | 0% |
 | Memory PSI some/10s | 1.08% | 34.56% | 0% | 0% |
 
-These changes are *observational noise/competing jobs*, not attributable optimisation gains. **Recovered production resources: zero verified.**
+These initial follow-up changes are *observational noise/competing jobs*, not attributable optimisation gains. At 00:39 UTC we removed the unused East `~/.cache/gh-install` installer tarball and extracted binary (~50 MiB before removal, not in PATH and no live processes using it). East disk free rose from ~0.22 MiB to **14.5 MiB net** despite continued collector writes; volume remains effectively **100% full**. No CPU/RAM recovery is established.
 
 ## Critical processes and data
 
@@ -31,7 +31,7 @@ No production trading services were restarted, disabled or reconfigured. No DB/W
 * West destination: `/home/ec2-user/sig-history-archives/east-sig-realtime-20261024.sqlite3.zst`, 2,245,480,094 bytes; matching manifest with SHA-256 roundtrip and `verified: true`, `verified_utc: 2026-10-24T14:34:15Z`. It is a **completed** transfer, not merely initiated.
 * West archive: `west-sig-realtime-20261024.sqlite3.zst`, about 3.8 GB, and a root-owned `.manifest.json` were listed. Manifest contents could not be read (EACCES); do **not** classify it as independently verified from this check alone.
 * West *live* `data/sig_realtime.sqlite3` remains about 48 GB and is being written to. Do not conflate cold archive with live data or remove it.
-* Neither server has comfortable retention headroom. No deletion or consolidation was undertaken.
+* Neither server has comfortable retention headroom. No historical database, research file, trading journal or archive was deleted or consolidated. Only unused East GH installation *cache* files were removed after confirming no live GH processes and `gh` not on PATH.
 
 ## Working scorecard (West, ~00:35 UTC)
 
@@ -60,6 +60,6 @@ Recent last-4,000-event sample: 525 ACK, 523 CANCEL_ACK, 138 CANCEL_UNCERTAIN, 5
 
 ## Guardrails and handoff
 
-No restart, deployment, enable/disable, change to strategy fair value, risk limit, maker/taker price or exposure. Do not delete large databases/archives as a workaround for disk pressure before trusted SHA-256 backups and ownership/access checks. Avoid `du` recursive scans and unbounded `journalctl` on West under CPU/IO pressure. A low-priority scorecard snapshot is safer than additional real-time per-market telemetry.
+No restart, deployment, service enable/disable, change to strategy fair value, risk limit, maker/taker price or exposure. East GH installer cache was cleaned, but free disk still critically insufficient. Do not delete large databases/archives as a workaround for disk pressure before trusted SHA-256 backups and ownership/access checks. Avoid `du` recursive scans and unbounded `journalctl` on West under CPU/IO pressure. A low-priority scorecard snapshot is safer than additional real-time per-market telemetry.
 
 **Immediate cooperation:** Lane 1 supplies fresh canonical cash/positions/lots and P&L; Lane 2 examines quote/cancel churn and p95 ACK; Lane 3 confirms taker fill identity/fee accounting; Lane 4 handles permissions/retention and reprioritisation with explicitly authorized operator support.
