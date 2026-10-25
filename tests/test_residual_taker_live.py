@@ -339,6 +339,21 @@ def test_economics_rejection_does_not_consume_live_cooldown() -> None:
     assert len(harness.plans) == 1  # Submitted order consumes cooldown.
 
 
+def test_stale_depth_skips_costly_portfolio_overlay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = _Harness(economics_gate_enabled=True)
+
+    def should_not_overlay(_portfolio: RuntimePortfolio) -> RuntimePortfolio:
+        raise AssertionError("stale depth must be screened before inventory overlays")
+
+    monkeypatch.setattr(harness.reservations, "overlay_portfolio", should_not_overlay)
+    stale = replace(_snapshot(), sig_depth_observed_ns=NOW - 1_500_000_001)
+    harness.run(stale)
+    assert harness.plans == []
+    assert harness.coordinator._skipped_signals["economics_stale_data"] == 1
+
+
 def test_position_cap_rejection_does_not_consume_live_cooldown() -> None:
     harness = _Harness()
     harness.coordinator._max_position = 200
