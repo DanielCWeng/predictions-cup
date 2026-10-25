@@ -479,7 +479,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.smoke_test:
         return asyncio.run(_public_smoke_test(settings))
     if not settings.research_collection_enabled:
-        _LOG.info("Polymarket historical research capture disabled; exiting without opening storage or feeds")
+        _LOG.info(
+            "Polymarket historical research capture disabled; "
+            "exiting without opening storage or feeds"
+        )
         return 0
     if args.require_explicit_universe and not parse_id_csv(settings.polymarket_supervised_ids):
         _LOG.error(
