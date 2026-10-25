@@ -377,6 +377,9 @@ def main() -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         force=True,
     )
+    if not settings.research_collection_enabled and not args.list_tournaments:
+        logger.info("SIG historical research capture disabled; exiting without opening storage or feeds")
+        return 0
     try:
         return asyncio.run(_run(args, settings))
     except KeyboardInterrupt:
