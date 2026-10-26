@@ -92,7 +92,7 @@ def roundtrip(
     return {
         "entry_price": round(entry_quote, 5),
         "exit_price": round(exit_quote, 5),
-        "net_pnl_susq_like": round(profit, 5),
+        "net_pnl_usdc_model": round(profit, 5),
         "gross_capture_cents_per_share": round((exit_quote-entry_quote)*100, 4),
         "entry_received_ms": entry["received_epoch_ms"],
         "exit_received_ms": exit_["received_epoch_ms"],
@@ -237,11 +237,12 @@ def report(depth_rows, market_rows, verified_path=VERIFIED, *, fee_bps=50.0,
         "replay_roundtrip_scenarios":calculations[:120],
         "economics_assumptions":{
             "fee_bps_per_leg_assumed":fee_bps,
+            "actual_fee_metadata_verified":False,
             "execution_uncertainty_haircut_cents_per_share":haircut_cents,
             "latency_senarios_seconds":[1,5,30],
             "holding_period_seconds":[60,300],
             "size_shares":list(SIZES),
-            "note":"Hindsight simulation using sampled displayed depth. No queue priority, fill guarantee, actual fee confirmation, SIG fair value, or genuine alpha. No trades placed.",
+            "note":"Hindsight simulation in Polymarket USDC using sampled displayed depth. No queue priority, fill guarantee, actual fee confirmation, SIG fair value, or genuine alpha. No trades placed.",
         },
         "information_lag":information_lag(market_rows,depth_rows,verified_path),
     }
