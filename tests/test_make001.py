@@ -278,6 +278,8 @@ def _engine(
     fill_seeking_min_edge: float = 0.02,
     deep_ladder_enabled: bool = False,
     deep_ladder_position_cap: int = 200,
+    soft_max_gross_exposure: float | None = None,
+    recycle_exchange_ids: frozenset[str] = frozenset(),
 ) -> MakerEngine:
     provider = DirectPolymarketFairValueProvider(
         _mapping(
@@ -308,6 +310,8 @@ def _engine(
             fill_seeking_min_edge=fill_seeking_min_edge,
             deep_ladder_enabled=deep_ladder_enabled,
             deep_ladder_position_cap=deep_ladder_position_cap,
+            soft_max_gross_exposure=soft_max_gross_exposure,
+            recycle_exchange_ids=recycle_exchange_ids,
         ),
         market_token_ids={"36": "token-yes"},
     )
@@ -3159,3 +3163,43 @@ def test_live_bulk_price_refresh_has_headroom_inside_configured_bbo_age() -> Non
     assert _maker_bulk_price_refresh_seconds(5.0) == 10.0
     assert _maker_bulk_price_refresh_seconds(14.0) == 14.0
     assert _maker_bulk_price_refresh_seconds(20.0) == 20.0
+
+
+def test_recycle_target_quotes_only_proven_inventory_reductions() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}))
+    positive = maker.quote(_maker_snapshot(signed_inventory=5.0))
+    assert positive.desired is not None
+    assert positive.desired.bid_size == 0
+    assert positive.desired.ask_size > 0
+    assert positive.gate.reason == "capital_recycle_reduce_only"
+
+    negative = maker.quote(_maker_snapshot(signed_inventory=-5.0))
+    assert negative.desired is not None
+    assert negative.desired.bid_size > 0
+    assert negative.desired.ask_size == 0
+
+    flat = maker.quote(_maker_snapshot())
+    assert flat.desired is None
+    assert flat.gate.reason == "capital_recycle_no_proven_holdings"
+
+
+def test_soft_cap_only_reduces_when_aggregate_gross_exceeds_reserve() -> None:
+    maker = _engine(soft_max_gross_exposure=3)
+    approaching = maker.quote(_maker_snapshot(signed_inventory=5.0))
+    assert approaching.desired is not None
+    assert approaching.desired.bid_size == 0
+    assert approaching.desired.ask_size > 0
+
+    below = maker.quote(_maker_snapshot(signed_inventory=2.0))
+    assert below.desired is not None
+    assert below.desired.bid_size > 0
+    assert below.desired.ask_size > 0
+
+
+def test_recycling_suppresses_quoting_without_trusted_signed_holdings() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}))
+    untrusted = maker.quote(_maker_snapshot(signed_inventory=5.0, account_trusted=False))
+    assert untrusted.desired is None
+
+    with pytest.raises(ValueError, match="numeric"):
+        MakerConfig(recycle_exchange_ids=frozenset({"tx15"}))
