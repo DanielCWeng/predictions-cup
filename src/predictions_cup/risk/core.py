@@ -146,7 +146,8 @@ def _verified_strict_inventory_reduction(
     """Admit only an issuer-reconciled, one-sided reduction of *existing* holdings.
 
     The potential fill must reduce gross in every partial-fill state, including
-    no fill.  A resting/UNCERTAIN order, proxy account, unsigned lot or stale
+    no fill.  A same-market resting order, any UNCERTAIN order, proxy account,
+    unsigned lot or stale
     capital state is never grounds for netting risk.  This is an accounting
     proof, not an order sender or a bypass of other risk gates.
     """
@@ -158,11 +159,10 @@ def _verified_strict_inventory_reduction(
         not portfolio.account_trusted
         or portfolio.trust_grade is not AccountTrustGrade.TRUSTED
         or portfolio.account_proxy_uncertainty != 0.0
-        or any(order.open or order.uncertain for order in portfolio.orders)
+        or any(order.uncertain for order in portfolio.orders)
         or not capital.account_trusted
         or not capital.reconciliation_complete
         or not exposure.trusted
-        or exposure.open_order_exposure != 0.0
         or exposure.uncertain_order_exposure != 0.0
         or not exposure.by_market
         or not exposure.by_tournament
@@ -177,6 +177,7 @@ def _verified_strict_inventory_reduction(
     by_tournament: dict[str, float] = {}
     signed_net = 0.0
     held = None
+    intent = intents[0]
     for position in portfolio.positions:
         key = (position.exchange_id, position.tournament_id)
         signed = position.signed_quantity
@@ -203,8 +204,32 @@ def _verified_strict_inventory_reduction(
         ):
             held = position
 
+    # Fully reconcile unrelated resting orders rather than requiring the
+    # entire maker to be order-free. Never share the target instrument with a
+    # pending order: that would risk a duplicate unwind/overshoot. Uncertain
+    # operations remain globally disqualifying.
+    pending_exposure = 0.0
+    for order in portfolio.orders:
+        if not (order.open or order.uncertain):
+            continue
+        if (
+            order.market_id == intent.market_id
+            and order.tournament_id == intent.tournament_id
+        ):
+            return False
+        if not math.isfinite(order.reserved_exposure) or order.reserved_exposure <= 0:
+            return False
+        pending_exposure += order.reserved_exposure
+        by_market[order.market_id] = (
+            by_market.get(order.market_id, 0.0) + order.reserved_exposure
+        )
+        by_tournament[order.tournament_id] = (
+            by_tournament.get(order.tournament_id, 0.0) + order.reserved_exposure
+        )
+
     if (
         held is None
+        or pending_exposure != exposure.open_order_exposure
         or sum(by_market.values()) != exposure.gross_exposure
         or signed_net != exposure.net_directional_exposure
         or by_market != {bucket.key: bucket.exposure for bucket in exposure.by_market}
@@ -213,7 +238,6 @@ def _verified_strict_inventory_reduction(
     ):
         return False
 
-    intent = intents[0]
     delta = float(intent.quantity)
     if intent.outcome_side is OutcomeSide.NO:
         delta = -delta
@@ -221,8 +245,8 @@ def _verified_strict_inventory_reduction(
         delta = -delta
 
     # Existing worst-case helper forbids overshoot and checks both sides of
-    # outstanding reservations.  Our stricter zero-pending gate is deliberate:
-    # concurrency/restart ambiguity must not double-spend the same inventory.
+    # outstanding reservations. Same-market pending operations are disallowed
+    # above; unrelated orders must match the authoritative exposure snapshot.
     return portfolio.is_inventory_reducing(
         exchange_id=intent.exchange_id,
         tournament_id=intent.tournament_id,
@@ -379,11 +403,12 @@ def evaluate_risk(
 
     new_order_exposure = sum(float(intent.quantity) for intent in intents)
     new_gross = new_order_exposure
-    if (
+    verified_reduction = (
         context.mode is ExecutionMode.LIVE
         and not opportunity.atomic
         and _verified_strict_inventory_reduction(tuple(intents), snapshot, capital)
-    ):
+    )
+    if verified_reduction:
         # A partial or absent fill cannot increase existing signed exposure.
         # Reserve the actual order size for order-count/open-order limits, but
         # do not double-count it as new market/gross/tournament exposure.
@@ -399,6 +424,7 @@ def evaluate_risk(
             new_exposure_by_market=new_exposure_by_market,
             new_gross=new_gross,
             new_order_exposure=new_order_exposure,
+            verified_reduction=verified_reduction,
             snapshot=snapshot,
             capital=capital,
             exposure_groups=context.exposure_groups,
@@ -445,6 +471,7 @@ def _evaluate_limit_set(
     new_exposure_by_market: dict[str, float],
     new_gross: float,
     new_order_exposure: float,
+    verified_reduction: bool,
     snapshot: RuntimeSnapshot,
     capital: CapitalRiskState | None,
     exposure_groups: tuple[MarketExposureGroup, ...],
@@ -459,7 +486,13 @@ def _evaluate_limit_set(
         + snapshot.portfolio.open_order_exposure
         + snapshot.portfolio.account_proxy_uncertainty
     )
-    if current_gross + new_gross > limits.max_gross_exposure:
+    # When issuer-reconciled holdings prove a strict reduction, a *preexisting*
+    # limit breach cannot be made worse by any partial fill. Preserve every
+    # ordinary limit for placements, including open-order and order-size caps.
+    if (
+        current_gross + new_gross > limits.max_gross_exposure
+        and not verified_reduction
+    ):
         return "max_gross_exposure"
 
     for market_id, additional in new_exposure_by_market.items():
@@ -542,6 +575,7 @@ def _evaluate_limit_set(
         if (
             exposure.tournament(execution_tournament_id) + pending_tournament + new_gross
             > limits.max_tournament_exposure
+            and not verified_reduction
         ):
             return "max_tournament_exposure"
 
