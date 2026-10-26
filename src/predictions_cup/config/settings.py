@@ -93,6 +93,10 @@ class AppSettings(BaseSettings):
     maker_deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
     maker_deep_ladder_position_cap: int = Field(default=200, gt=0)
     maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
+    # Soft capital target only for MAKE quote admission; does not alter RISK-002.
+    maker_capital_headroom_shares: int = Field(default=0, ge=0)
+    # Exact SIG exchange IDs to unwind through existing RISK/BUILD-009 maker.
+    maker_recycle_exchange_ids: str = ""
     maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
     maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)
     maker_toxicity_half_spread_ticks: float = Field(default=4.0, ge=0.0)
@@ -476,6 +480,10 @@ class AppSettings(BaseSettings):
             "maker_minimum_size": self.maker_minimum_size,
             "maker_base_half_spread_ticks": self.maker_base_half_spread_ticks,
             "maker_inventory_risk_aversion": self.maker_inventory_risk_aversion,
+            "maker_capital_headroom_shares": self.maker_capital_headroom_shares,
+            "maker_recycle_exchange_count": len(
+                {x.strip() for x in self.maker_recycle_exchange_ids.split(",") if x.strip()}
+            ),
             "maker_uncertainty_multiplier": self.maker_uncertainty_multiplier,
             "maker_volatility_multiplier": self.maker_volatility_multiplier,
             "maker_toxicity_half_spread_ticks": self.maker_toxicity_half_spread_ticks,
