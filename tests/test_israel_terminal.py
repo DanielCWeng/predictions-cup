@@ -67,7 +67,7 @@ def test_roundtrip_includes_sweeps_fees_and_haircut():
     a=analysis.roundtrip(ms,"UP",50,entries,latency_s=1,hold_s=60,
                          fee_bps=50,extra_haircut_cents=0.005)
     assert a is not None
-    assert a["net_pnl_susq_like"]==pytest.approx(50*(.65-.6-.005*(.6+.65)-.005))
+    assert a["net_pnl_usdc_model"]==pytest.approx(50*(.65-.6-.005*(.6+.65)-.005))
 
 
 def test_roundtrip_rejects_stale_book_or_missing_depth():
