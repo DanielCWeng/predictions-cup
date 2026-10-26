@@ -188,9 +188,13 @@ async def market_loop(stop: asyncio.Event, metadata: dict) -> None:
                 }))
                 emit("market_stream_connected", dict(token_count=len(tokens)))
                 state_save(market_stream="connected", token_count=len(tokens))
+                last_ping = time.monotonic()
                 while not stop.is_set() and time.time() < END_EPOCH:
+                    if time.monotonic() - last_ping >= 10:
+                        await stream.send("PING")  # Polymarket application heartbeat
+                        last_ping = time.monotonic()
                     try:
-                        raw = await asyncio.wait_for(stream.recv(), timeout=30)
+                        raw = await asyncio.wait_for(stream.recv(), timeout=10)
                     except TimeoutError:
                         continue
                     try:
@@ -205,8 +209,27 @@ async def market_loop(stop: asyncio.Event, metadata: dict) -> None:
                         for update in updates:
                             if not isinstance(update, dict):
                                 continue
-                            token = str(update.get("asset_id") or event.get("asset_id") or "")
+                            token = str(update.get("asset_id") or event.get("asset_id") or event.get("winning_asset_id") or "")
                             if token not in metadata:
+                                continue
+                            if event_type in ("market_resolved", "tick_size_change"):
+                                emit("market_lifecycle", dict(
+                                    asset_id=token, event_type=event_type,
+                                    winning_outcome=event.get("winning_outcome"),
+                                    old_tick=event.get("old_tick_size"),
+                                    new_tick=event.get("new_tick_size"),
+                                    actionable=False))
+                                continue
+                            if event_type == "last_trade_price":
+                                try:
+                                    size = float(event.get("size", "0"))
+                                    price = float(event.get("price", "0"))
+                                except (ValueError, TypeError):
+                                    continue
+                                if size >= 50 and 0 <= price <= 1:
+                                    emit("trade_activity", dict(
+                                        asset_id=token, price=price, size=size,
+                                        side=event.get("side"), actionable=False))
                                 continue
                             bid, ask = None, None
                             if event_type == "book":
