@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
 import websockets
+from israel_terminal_depth import DepthMonitor
 
 ROOT = Path(__file__).resolve().parent
 TAPE = ROOT / "israel_rehearsal_events.jsonl"
@@ -176,6 +177,8 @@ async def market_loop(stop: asyncio.Event, metadata: dict) -> None:
     detector = SwingDetector()
     attempts = 0
     while not stop.is_set() and time.time() < END_EPOCH:
+        # Never bridge book state across a disconnect or exchange resubscribe.
+        depth = DepthMonitor(set(tokens))
         try:
             async with websockets.connect(
                 "wss://ws-subscriptions-clob.polymarket.com/ws/market",
@@ -196,6 +199,7 @@ async def market_loop(stop: asyncio.Event, metadata: dict) -> None:
                     try:
                         raw = await asyncio.wait_for(stream.recv(), timeout=10)
                     except TimeoutError:
+                        depth.flush()
                         continue
                     try:
                         parsed = json.loads(raw)
@@ -221,6 +225,7 @@ async def market_loop(stop: asyncio.Event, metadata: dict) -> None:
                                     actionable=False))
                                 continue
                             if event_type == "last_trade_price":
+                                depth.on_trade(token, event)
                                 try:
                                     size = float(event.get("size", "0"))
                                     price = float(event.get("price", "0"))
@@ -233,12 +238,15 @@ async def market_loop(stop: asyncio.Event, metadata: dict) -> None:
                                 continue
                             bid, ask = None, None
                             if event_type == "book":
+                                depth.on_book(token, update)
                                 bids = update.get("bids") or []
                                 asks = update.get("asks") or []
                                 if bids and asks:
                                     bid = max(float(x["price"]) for x in bids)
                                     ask = min(float(x["price"]) for x in asks)
                             elif event_type in ("price_change", "best_bid_ask"):
+                                if event_type == "price_change":
+                                    depth.on_delta(token, update)
                                 try:
                                     bid = float(update["best_bid"])
                                     ask = float(update["best_ask"])
@@ -251,6 +259,7 @@ async def market_loop(stop: asyncio.Event, metadata: dict) -> None:
                                 except ValueError:
                                     provider_ms = None
                                 detector.handle(token, bid, ask, provider_ms)
+                    depth.flush()
         except Exception as exc:
             emit("source_error", dict(source="polymarket-ws",
                 error=type(exc).__name__, actionable=False))
@@ -284,6 +293,16 @@ async def run(once: bool) -> None:
     await asyncio.gather(market_loop(stop, meta), rss_loop(stop))
     emit("collector_stopped", dict(reason="deadline_or_signal"))
     state_save(market_stream="stopped")
+    # Produce a bounded, explicitly hypothetical end-of-run readout without
+    # depending on a separate scheduled job or trading infrastructure.
+    try:
+        from israel_terminal_analysis import report, read_tape, TAPE, DEPTH, VERIFIED
+        output = ROOT / "israel_terminal_report.json"
+        result = await asyncio.to_thread(report, read_tape(DEPTH), read_tape(TAPE), VERIFIED)
+        output.write_text(json.dumps(result, indent=2), encoding="utf-8")
+        emit("analysis_ready", dict(report_path=str(output), trading_authority=False))
+    except Exception as exc:
+        emit("source_error", dict(source="terminal-analysis", error=type(exc).__name__, actionable=False))
 
 
 if __name__ == "__main__":
