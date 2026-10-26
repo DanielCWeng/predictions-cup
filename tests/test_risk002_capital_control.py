@@ -390,6 +390,84 @@ def test_inventory_reduction_with_pending_or_uncertain_order_stays_blocked(
     assert decision.reason == "max_gross_exposure"
 
 
+def _pending_other_market_risk_case(
+    *,
+    target_pending: bool = False,
+    uncertain: bool = False,
+    mismatched_capital: bool = False,
+    increase: bool = False,
+    quantity: int = 1,
+) -> RiskDecision:
+    positions = (
+        RuntimePosition("1", "m1", "t1", 8.0, 8.0),
+        RuntimePosition("2", "m2", "t1", 1.0, 1.0),
+    )
+    order = RuntimeOrderState(
+        "resting-elsewhere",
+        "1" if target_pending else "2",
+        "m1" if target_pending else "m2",
+        "t1",
+        1.0,
+        True,
+        uncertain,
+        signed_quantity=-1.0,
+    )
+    snapshot = _snapshot(positions=positions, orders=(order,))
+    exposure = build_exposure_snapshot(snapshot.portfolio)
+    if mismatched_capital:
+        exposure = replace(exposure, open_order_exposure=0.0)
+    capital = replace(
+        _capital(),
+        exposure=replace(
+            exposure,
+            strategy_attribution_complete=True,
+            group_classification_complete=True,
+        ),
+    )
+    proposal = _opportunity(quantity=quantity)
+    proposal = replace(
+        proposal,
+        legs=(replace(
+            proposal.legs[0],
+            action=OrderAction.BUY if increase else OrderAction.SELL,
+        ),),
+    )
+    limits = _limits(
+        max_order_size=10,
+        max_gross_exposure=9.0,
+        max_per_market_exposure=8.0,
+        max_tournament_exposure=9.0,
+        max_open_order_exposure=3.0,
+    )
+    return evaluate_risk(proposal, snapshot, _context(limits, capital=capital))
+
+
+def test_strict_reduction_with_reconciled_other_market_quote_frees_overcap_inventory() -> None:
+    decision = _pending_other_market_risk_case()
+    assert decision.approved
+    assert decision.reason == "approved"
+    assert len(decision.intents) == 1
+    assert decision.intents[0].action is OrderAction.SELL
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ("target_pending", "uncertain", "mismatched_capital", "increase"),
+)
+def test_other_market_reduction_exception_fails_closed_on_missing_proof(
+    variant: str,
+) -> None:
+    decision = _pending_other_market_risk_case(**{variant: True})
+    assert not decision.approved
+    assert decision.reason == "max_gross_exposure"
+
+
+def test_unrelated_quote_does_not_relax_size_or_open_order_limit() -> None:
+    decision = _pending_other_market_risk_case(quantity=11)
+    assert not decision.approved
+    assert decision.reason == "max_order_size"
+
+
 @pytest.mark.parametrize(
     ("capital_gross", "capital_net", "signed"),
     (
