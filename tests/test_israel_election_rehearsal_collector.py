@@ -2,6 +2,8 @@
 import importlib.util
 from datetime import datetime
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts/research"))
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/research/israel_election_rehearsal_collector.py"
 spec = importlib.util.spec_from_file_location("israel_rehearsal_collector", MODULE_PATH)
