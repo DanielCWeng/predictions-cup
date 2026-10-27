@@ -8,8 +8,8 @@ from predictions_cup.maker.rotation_recovery import (
     ExitApproval,
     RotationEvidence,
     RotationEvidenceCache,
-    RotationRequest,
     RotationOutcome,
+    RotationRequest,
     TwoPhaseRotation,
 )
 
