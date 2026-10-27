@@ -2,8 +2,14 @@
 import asyncio
 
 from predictions_cup.maker.rotation_recovery import (
-    RotationEvidence, RotationEvidenceCache, AuthoritativeProof,
-    RotationRequest, ExitApproval, DispatchReceipt, EntryApproval, TwoPhaseRotation,
+    AuthoritativeProof,
+    DispatchReceipt,
+    EntryApproval,
+    ExitApproval,
+    RotationEvidence,
+    RotationEvidenceCache,
+    RotationRequest,
+    TwoPhaseRotation,
 )
 
 
@@ -12,8 +18,14 @@ def test_account_changes_are_exchange_scoped():
     positions = (("a", 500), ("c", -100))
     cache.update_account(trusted=True, positions=positions, pending_orders=())
     events = []
-    assert cache.offer(RotationEvidence("a", "b", 100, 10, 15, 100), now_ns=100, publish=events.append)
-    assert not cache.offer(RotationEvidence("a", "b", 100, 10, 15, 100), now_ns=101, publish=events.append)
+    assert cache.offer(
+        RotationEvidence("a", "b", 100, 10, 15, 100),
+        now_ns=100, publish=events.append,
+    )
+    assert not cache.offer(
+        RotationEvidence("a", "b", 100, 10, 15, 100),
+        now_ns=101, publish=events.append,
+    )
     assert len(events) == 1
     cache.offer(RotationEvidence("c", "d", 100, 10, 15, 100), now_ns=101)
     cache.update_account(trusted=True, positions=positions,
