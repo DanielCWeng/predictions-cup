@@ -12,6 +12,7 @@ from predictions_cup.maker.rotation_recovery import (
     DispatchReceipt,
     EntryApproval,
     ExitApproval,
+    RotationOutcome,
     RotationRequest,
     TwoPhaseRotation,
 )
@@ -91,24 +92,28 @@ def test_rotation_never_reinvests_unverified_exposure(scenario: str, expected: s
         actions.append("entry")
         return DispatchReceipt(req.operation_id + ":entry", "ACKED")
 
-    async def execute() -> tuple[object, object]:
+    async def execute() -> tuple[RotationOutcome, RotationOutcome]:
         controller = TwoPhaseRotation(
             live_enabled=True,
             max_tranche_shares=500,
             max_entry_notional=500.0,
         )
-        kwargs = dict(
-            read_before=read_before,
-            claim_operation=claim,
-            prepare_exit=prepare_exit,
-            dispatch_exit=dispatch_exit,
-            reconcile_exit=reconcile_exit,
-            read_attributed_exit=read_attributed_exit,
-            prepare_entry=prepare_entry,
-            dispatch_entry=dispatch_entry,
-        )
-        first = await controller.run(request, **kwargs)
-        duplicate = await controller.run(request, **kwargs)
+
+        async def invoke() -> RotationOutcome:
+            return await controller.run(
+                request,
+                read_before=read_before,
+                claim_operation=claim,
+                prepare_exit=prepare_exit,
+                dispatch_exit=dispatch_exit,
+                reconcile_exit=reconcile_exit,
+                read_attributed_exit=read_attributed_exit,
+                prepare_entry=prepare_entry,
+                dispatch_entry=dispatch_entry,
+            )
+
+        first = await invoke()
+        duplicate = await invoke()
         return first, duplicate
 
     result, duplicate = asyncio.run(execute())
