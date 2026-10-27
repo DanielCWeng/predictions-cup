@@ -197,6 +197,37 @@ class DispatchReceipt:
 
 
 @dataclass(frozen=True, slots=True)
+class AttributedExitProof:
+    """A final, journal-matched execution fill, never a simple ACK.
+
+    signed_delta is change in SIGNED YES inventory. It is negative when
+    reducing a YES holding and positive when closing a NO holding.
+    """
+
+    operation_id: str
+    exchange_id: str
+    signed_delta: int
+    filled_shares: int
+    final: bool
+    reconciled: bool
+
+    def matches(
+        self, *, request: RotationRequest, before: AuthoritativeProof,
+        after: AuthoritativeProof, expected_filled: int,
+    ) -> bool:
+        return (
+            self.operation_id == request.operation_id + ":exit"
+            and self.exchange_id == request.exit_exchange_id
+            and type(self.signed_delta) is int
+            and type(self.filled_shares) is int
+            and self.final and self.reconciled
+            and self.filled_shares == expected_filled
+            and abs(self.signed_delta) == expected_filled
+            and self.signed_delta == after.signed_shares - before.signed_shares
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class EntryApproval:
     quantity: int
     net_incremental_gain: float
@@ -252,9 +283,13 @@ class TwoPhaseRotation:
         request: RotationRequest,
         *,
         read_before: Callable[[str], Awaitable[AuthoritativeProof]],
+        # Caller must atomically claim the logical ID in BUILD-009 journal or
+        # equivalent durable storage before first LIVE dispatch.
+        claim_operation: Callable[[str], Awaitable[bool]],
         prepare_exit: Callable[[RotationRequest, AuthoritativeProof], Awaitable[ExitApproval]],
         dispatch_exit: Callable[[RotationRequest, ExitApproval], Awaitable[DispatchReceipt]],
         reconcile_exit: Callable[[str], Awaitable[AuthoritativeProof]],
+        read_attributed_exit: Callable[[str], Awaitable[AttributedExitProof]],
         prepare_entry: Callable[[RotationRequest, int], Awaitable[EntryApproval]],
         dispatch_entry: Callable[[RotationRequest, EntryApproval], Awaitable[DispatchReceipt]],
     ) -> RotationOutcome:
@@ -265,9 +300,12 @@ class TwoPhaseRotation:
         async with self._lock:
             if request.operation_id in self._used_operations:
                 return RotationOutcome("BLOCKED", reason="duplicate")
-            # Consume ID before first asynchronous operation; a timeout cannot
-            # cause the same logical operation to place a second exit.
+            # Local de-duplication is insufficient after a crash/restart.
+            # The injected journal claim must be atomic and persistent.
+            # Consume local ID first to fail closed on an interrupted claim.
             self._used_operations.add(request.operation_id)
+            if not await claim_operation(request.operation_id):
+                return RotationOutcome("BLOCKED", reason="journal_claim_duplicate")
             before = await read_before(request.exit_exchange_id)
             if (
                 not before.clean()
@@ -300,6 +338,15 @@ class TwoPhaseRotation:
                 no_flip = before.signed_shares <= after.signed_shares <= 0
             if not no_flip or not 0 < filled <= exit_order.quantity:
                 return RotationOutcome("HALTED", reason="no_verified_reduction")
+            # A maker fill on the same contract is NOT evidence that *this*
+            # logical exit filled. Match the signed delta with deduplicated
+            # BUILD-009 fills by the exact exit operation ID.
+            attributed = await read_attributed_exit(request.operation_id + ":exit")
+            if not attributed.matches(
+                request=request, before=before, after=after,
+                expected_filled=filled,
+            ):
+                return RotationOutcome("HALTED", reason="exit_fill_not_attributed")
             next_entry = await prepare_entry(request, filled)
             if (
                 not next_entry.clean(
