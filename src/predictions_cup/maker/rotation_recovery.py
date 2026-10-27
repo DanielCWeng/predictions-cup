@@ -285,7 +285,7 @@ class TwoPhaseRotation:
             ):
                 return RotationOutcome("BLOCKED", reason="exit_not_proved")
             receipt = await dispatch_exit(request, exit_order)
-            if not receipt.certain or receipt.operation_id != request.operation_id:
+            if not receipt.certain or receipt.operation_id != request.operation_id + ':exit':
                 return RotationOutcome("HALTED", reason="exit_outcome_uncertain")
             after = await reconcile_exit(request.exit_exchange_id)
             if not after.clean() or after.exchange_id != before.exchange_id:
@@ -312,7 +312,7 @@ class TwoPhaseRotation:
                     "RELEASED_ONLY", filled, reason="replacement_no_longer_approved"
                 )
             new_receipt = await dispatch_entry(request, next_entry)
-            if not new_receipt.certain or new_receipt.operation_id != request.operation_id:
+            if not new_receipt.certain or new_receipt.operation_id != request.operation_id + ':entry':
                 return RotationOutcome(
                     "ENTRY_UNCERTAIN", filled, reason="requires_order_reconciliation"
                 )
