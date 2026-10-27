@@ -2,6 +2,7 @@
 import asyncio
 
 from predictions_cup.maker.rotation_recovery import (
+    AttributedExitProof,
     AuthoritativeProof,
     DispatchReceipt,
     EntryApproval,
@@ -38,7 +39,17 @@ def test_account_changes_are_exchange_scoped() -> None:
 
 
 def test_partial_fill_requires_authoritative_reconcile() -> None:
-    sequence = []
+    sequence: list[str] = []
+    claimed: set[str] = set()
+    async def claim(opid: str) -> bool:
+        sequence.append("claim")
+        if opid in claimed:
+            return False
+        claimed.add(opid)
+        return True
+    async def attribution(opid: str) -> AttributedExitProof:
+        sequence.append("attribution")
+        return AttributedExitProof(opid, "exit", -60, 60, True, True)
     async def before(_: str) -> AuthoritativeProof:
         return AuthoritativeProof("exit", 100, 5, True, True, 0, 0)
     async def exit_check(req: RotationRequest, proof: AuthoritativeProof) -> ExitApproval:
@@ -61,8 +72,10 @@ def test_partial_fill_requires_authoritative_reconcile() -> None:
         request = RotationRequest("r1", "exit", "entry", 100, 5.)
         first = await controller.run(
             request,
-            read_before=before, prepare_exit=exit_check,
+            read_before=before, claim_operation=claim,
+            prepare_exit=exit_check,
             dispatch_exit=exit_send, reconcile_exit=reconcile,
+            read_attributed_exit=attribution,
             prepare_entry=entry_check, dispatch_entry=entry_send,
         )
         duplicate = await controller.run(
@@ -76,4 +89,6 @@ def test_partial_fill_requires_authoritative_reconcile() -> None:
     assert first.status == "ENTRY_DISPATCHED"
     assert first.confirmed_reduction_shares == first.entry_shares == 60
     assert duplicate.status == "BLOCKED"
-    assert sequence == ["exit", "reconcile", "entry_check", "entry"]
+    assert sequence == [
+        "claim", "exit", "reconcile", "attribution", "entry_check", "entry"
+    ]
