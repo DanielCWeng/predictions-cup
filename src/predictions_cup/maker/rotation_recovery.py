@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 import math
 from collections import deque
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,7 +180,7 @@ class ExitApproval:
             and type(self.executable_limit_ticks) is int
             and 1 <= self.executable_limit_ticks <= 199
             and math.isfinite(self.worst_case_cash_cost)
-            and 0 <= self.worst_case_cash_cost
+            and self.worst_case_cash_cost >= 0
             and 0 <= self.depth_age_ns <= max_age_ns
             and self.approved_by_risk and self.strict_reduction_proved
         )
@@ -312,7 +312,10 @@ class TwoPhaseRotation:
                     "RELEASED_ONLY", filled, reason="replacement_no_longer_approved"
                 )
             new_receipt = await dispatch_entry(request, next_entry)
-            if not new_receipt.certain or new_receipt.operation_id != request.operation_id + ':entry':
+            if (
+                not new_receipt.certain
+                or new_receipt.operation_id != request.operation_id + ':entry'
+            ):
                 return RotationOutcome(
                     "ENTRY_UNCERTAIN", filled, reason="requires_order_reconciliation"
                 )
