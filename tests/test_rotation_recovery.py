@@ -80,8 +80,10 @@ def test_partial_fill_requires_authoritative_reconcile() -> None:
         )
         duplicate = await controller.run(
             request,
-            read_before=before, prepare_exit=exit_check,
+            read_before=before, claim_operation=claim,
+            prepare_exit=exit_check,
             dispatch_exit=exit_send, reconcile_exit=reconcile,
+            read_attributed_exit=attribution,
             prepare_entry=entry_check, dispatch_entry=entry_send,
         )
         return first, duplicate
