@@ -996,7 +996,9 @@ class ResidualTakerLiveCoordinator:
                 item.max_open_order_exposure - portfolio.open_order_exposure
             )) for item in limits),
         )
+        quantity = self._capital_headroom_quantity(snapshot, context, quantity)
         if quantity < 1:
+            self._skipped_signals["rotation_entry_no_capital_room"] += 1
             return ()
         levels = book.asks if action is OrderAction.BUY else book.bids
         remaining = quantity
@@ -1088,6 +1090,64 @@ class ResidualTakerLiveCoordinator:
         if cancelled is not None:
             results.append(cancelled)
         return tuple(results)
+
+    def _capital_headroom_quantity(
+        self, snapshot: MakerMarketSnapshot, context: RiskContext, quantity: int,
+    ) -> int:
+        """Clip only exposure-increasing trades to *actual* remaining capacity.
+
+        This is a pre-sizing optimisation, not a replacement for central Risk.
+        Use the same worst-case reservation treatment as RISK-002.
+        """
+        portfolio = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
+        limits = [item for item in (
+            context.limits,
+            None if context.profile is None else context.profile.limits,
+            None if context.profile is None else context.profile.hard_limits,
+        ) if item is not None]
+        if not limits:
+            return 0
+        gross = (
+            portfolio.gross_exposure + portfolio.open_order_exposure
+            + portfolio.account_proxy_uncertainty
+        )
+        market = (
+            sum(
+                abs(p.gross_exposure) for p in portfolio.positions
+                if p.market_id == snapshot.market_id
+                and p.tournament_id == snapshot.tournament_id
+            )
+            + sum(
+                order.reserved_exposure for order in portfolio.orders
+                if (order.open or order.uncertain)
+                and order.market_id == snapshot.market_id
+                and order.tournament_id == snapshot.tournament_id
+            )
+            + portfolio.account_proxy_uncertainty
+        )
+        capital = context.capital_state
+        pending_tournament = sum(
+            o.reserved_exposure for o in portfolio.orders
+            if (o.open or o.uncertain)
+            and o.strategy_id is not None
+            and o.tournament_id == snapshot.tournament_id
+        )
+        for limit in limits:
+            quantity = min(
+                quantity,
+                max(0, math.floor(limit.max_gross_exposure - gross)),
+                max(0, math.floor(limit.max_per_market_exposure - market)),
+            )
+            if limit.max_tournament_exposure is not None and capital is not None:
+                quantity = min(
+                    quantity,
+                    max(0, math.floor(
+                        limit.max_tournament_exposure
+                        - capital.exposure.tournament(snapshot.tournament_id)
+                        - pending_tournament
+                    )),
+                )
+        return max(0, quantity)
 
     def _capped_quantity(
         self,
@@ -1265,6 +1325,26 @@ class ResidualTakerLiveCoordinator:
                 signal.direction,
             )
             return ()
+        # Align ordinary residual taker sizes to available gross/tournament
+        # capacity before evaluating full-depth economics. A 500-share signal
+        # with 200 shares of free room must not be abandoned wholesale.
+        decision_context = (
+            self._risk_context_source()
+            if callable(self._risk_context_source)
+            else self._risk_context_source
+        )
+        signed_delta = quantity if action is OrderAction.BUY else -quantity
+        if not held.is_inventory_reducing(
+            exchange_id=exchange_id,
+            tournament_id=snapshot.tournament_id,
+            signed_delta=signed_delta,
+        ):
+            quantity = self._capital_headroom_quantity(
+                snapshot, decision_context, quantity,
+            )
+            if quantity < 1:
+                self._skipped_signals["capital_no_headroom"] += 1
+                return ()
         # Only inventory guaranteed to shrink under every partial fill may
         # offset new collateral in the conservative cash screen.
         low, high = held.worst_case_inventory_bounds(snapshot.exchange_id, snapshot.tournament_id)
@@ -1378,12 +1458,10 @@ class ResidualTakerLiveCoordinator:
             )
             return ()
 
-        context = (
-            self._risk_context_source()
-            if callable(self._risk_context_source)
-            else self._risk_context_source
+        context = replace(
+            decision_context,
+            kill_switch=decision_context.kill_switch or self._kill_switch.active,
         )
-        context = replace(context, kill_switch=context.kill_switch or self._kill_switch.active)
         opportunity = Opportunity(
             family=StrategyFamily.FV_TAKE,
             strategy_id=STRATEGY_ID,
