@@ -7,7 +7,8 @@ builds immutable snapshots from existing in-memory state, and invokes the maker.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from time import monotonic_ns
 from uuid import uuid4
@@ -72,6 +73,9 @@ class MakerRuntimeLoop:
             raise ValueError("max_exchanges_per_cycle must be positive")
         self._max_exchanges_per_cycle = max_exchanges_per_cycle
         self._blocked_exchange_ids: frozenset[str] = frozenset()
+        # Serialise complete maker/taker decision cycles with authoritative
+        # account snapshots. Never interrupt an order halfway through dispatch.
+        self._account_snapshot_gate = asyncio.Lock()
         self._wake = asyncio.Event()
         self._pending_exchanges: set[str] = set()
         self._priority_pm_exchanges: set[str] = set()
@@ -166,7 +170,22 @@ class MakerRuntimeLoop:
             return None
         return await self._drain_once()
 
+    @asynccontextmanager
+    async def quiet_for_account_snapshot(self) -> AsyncIterator[None]:
+        """Drain in-flight maker/taker work, then hold off new venue decisions.
+
+        Market feed callbacks remain active; their updates are coalesced and
+        processed after the bounded authoritative reconciliation finishes.
+        Safety recovery can still execute its own journalled cancellations.
+        """
+        async with self._account_snapshot_gate:
+            yield
+
     async def _drain_once(self) -> MakerCycleResult | None:
+        async with self._account_snapshot_gate:
+            return await self._drain_once_under_gate()
+
+    async def _drain_once_under_gate(self) -> MakerCycleResult | None:
         exchange_ids = frozenset(self._pending_exchanges)
         global_recheck = self._global_recheck
         oldest_observed_ns = self._oldest_observed_ns
