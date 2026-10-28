@@ -7,9 +7,8 @@ builds immutable snapshots from existing in-memory state, and invokes the maker.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Mapping
 from contextlib import asynccontextmanager
-from collections.abc import Awaitable, Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from time import monotonic_ns
 from uuid import uuid4
