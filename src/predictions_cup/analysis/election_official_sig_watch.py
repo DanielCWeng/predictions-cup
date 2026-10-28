@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -39,12 +40,13 @@ async def capture_official_sig_pair(
     *,
     official: TexasSenateObservation,
     tournament_id: str,
+    pause: Callable[[float], Awaitable[None]] = asyncio.sleep,
 ) -> dict[str, object]:
     if not tournament_id.strip():
         raise ValueError("missing configured SIG tournament")
     books: list[dict[str, Any]] = []
     for exchange, market, party in TEXAS_MARKETS:
-        await asyncio.sleep(0.75)
+        await pause(0.75)
         started = datetime.now(UTC)
         book = await reader.get_orderbook(
             exchange, depth=20, tournament_id=tournament_id,
@@ -102,9 +104,6 @@ async def run(
                     rest, official=official, tournament_id=settings.tournament_id,
                 )
                 quotes = snapshot["sig_quotes"]
-                fingerprint = json.dumps(
-                    [official.body_sha256, quotes], sort_keys=True,
-                )
                 # Suppress repeated identical source+book status. Timestamps
                 # change on every read, so use only the price/depth fields.
                 if isinstance(quotes, list):
