@@ -1452,7 +1452,10 @@ class ResidualTakerLiveCoordinator:
                     return ()
                 capital = decision_context.capital_state
                 if capital is not None:
-                    signed_full = economics.quantity if action is OrderAction.BUY else -economics.quantity
+                    signed_full = (
+                        economics.quantity if action is OrderAction.BUY
+                        else -economics.quantity
+                    )
                     if not held.is_inventory_reducing(
                         exchange_id=exchange_id,
                         tournament_id=snapshot.tournament_id,
