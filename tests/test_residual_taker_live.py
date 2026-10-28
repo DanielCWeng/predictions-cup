@@ -968,3 +968,44 @@ def test_rotation_reinvestment_rejects_unattributed_exit_without_order() -> None
     change = MakerStateChange("wrong-fills", NOW, frozenset({EXCHANGE}))
     assert asyncio.run(harness.coordinator._execute_rotation_entry(change, snap)) == ()
     assert not harness.plans
+
+
+def test_pending_rotation_prioritises_selected_entry_over_unrelated_taker() -> None:
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries["other-entry"] = _PendingRotationEntry(
+        "prior:exit", "prior", "other-entry", "BUY", TOURNAMENT,
+        50, 50, .01, NOW - 5, NOW - 10,
+    )
+    harness.run(_snapshot())
+    assert harness.plans == []
+    assert harness.coordinator._skipped_signals["rotation_capacity_priority"] == 1
+
+
+def test_pending_rotation_permits_selected_replacement_taker() -> None:
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries[EXCHANGE] = _PendingRotationEntry(
+        "prior:exit", "prior", EXCHANGE, "BUY", TOURNAMENT,
+        50, 50, .01, NOW - 5, NOW - 10,
+    )
+    harness.run(_snapshot())
+    assert len(harness.plans) == 1
+    assert harness.coordinator._skipped_signals["rotation_capacity_priority"] == 0
+
+
+def test_rotation_capital_priority_expires_automatically() -> None:
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries["other-entry"] = _PendingRotationEntry(
+        "prior:exit", "prior", "other-entry", "BUY", TOURNAMENT,
+        50, 50, .01, NOW - 5, NOW - 75_000_000_001,
+    )
+    harness.run(_snapshot())
+    assert len(harness.plans) == 1
