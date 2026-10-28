@@ -163,7 +163,7 @@ async def scan_capital(*, max_positions: int, size_limit: int, depth: int) -> di
         "all_current_holdings_win_theoretical_ceiling": str(
             all_shares_payout_ceiling
         ),
-        "all_current_holdings_win_is_not_independently_possible_verified": True,
+        "assumes_all_current_holdings_win_without_joint_consistency_check": True,
         "current_holdings_cannot_reach_present_leader_even_if_all_win": (
             all_shares_payout_ceiling < first_target
         ),
