@@ -1642,8 +1642,6 @@ class ResidualTakerLiveCoordinator:
                 ),
             )
         _LOG.info("TAKE outcome op=%s state=%s", logical_operation_id, event.state.value)
-        if event.state is LifecycleState.FILLED:
-            self._last_filled_account_ns[exchange_id] = snapshot.account_observed_ns
         if redirect_from is not None and event.state is LifecycleState.FILLED:
             # The ordinary taker has genuinely filled the better alternative.
             # Move the investment target; the reconciled-position check will
@@ -1670,6 +1668,26 @@ class ResidualTakerLiveCoordinator:
         cancel_event = await self._cancel_remainder(plan, event, snapshot.tournament_id)
         if cancel_event is not None:
             events.append(cancel_event)
+        # A PARTIALLY_FILLED placement followed by CANCELLED still changed the
+        # position and spendable cash. A fill may also race an OPEN ACK and
+        # appear only in BUILD-009's journal during cancellation. In either
+        # case, the pre-dispatch account snapshot cannot authorise another take
+        # of this market. Pure OPEN/CANCELLED orders add no such barrier.
+        fill_states = {LifecycleState.PARTIALLY_FILLED, LifecycleState.FILLED}
+        observed_fill = event.state in fill_states or (
+            cancel_event is not None and cancel_event.state in fill_states
+        )
+        if not observed_fill:
+            observed_fill = any(
+                item.event_type in {"REALTIME_FILL", "AUTHORITATIVE_FILL"}
+                or item.terminal_status in {
+                    LifecycleState.PARTIALLY_FILLED.value,
+                    LifecycleState.FILLED.value,
+                }
+                for item in self._journal.events(logical_operation_id)
+            )
+        if observed_fill:
+            self._last_filled_account_ns[exchange_id] = snapshot.account_observed_ns
         return tuple(events)
 
     def _crosses_own_quote(self, exchange_id: str, action: OrderAction, ticks: int) -> bool:
