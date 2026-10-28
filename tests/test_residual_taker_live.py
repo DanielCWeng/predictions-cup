@@ -1016,7 +1016,9 @@ def test_rotation_capital_redirect_requires_higher_executable_ev() -> None:
     from typing import cast
 
     from predictions_cup.maker.liquidity_allocator import (
-        EntryTier, LiquidityWeightedAllocator, RankedEntry,
+        EntryTier,
+        LiquidityWeightedAllocator,
+        RankedEntry,
     )
     from predictions_cup.maker.residual_live import _PendingRotationEntry
 
