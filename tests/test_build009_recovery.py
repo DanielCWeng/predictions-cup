@@ -1718,3 +1718,65 @@ def test_order_fills_accepts_live_sig_item_shape() -> None:
     parsed = OrderFillsResponseDto.model_validate(payload)
     assert parsed.data[0].exchange_id is None
     assert parsed.exchange_id == "1045"
+
+
+def test_duplicate_cancel_404_does_not_abort_account_refresh_or_assume_fill(
+    tmp_path: Path,
+) -> None:
+    from predictions_cup.sig.errors import SigNotFoundError
+
+    journal = ExecutionJournal(tmp_path / "duplicate-cancel-404.sqlite3")
+    cancellation = ExecutionEnvelope.cancellation(
+        logical_operation_id="cancel-404-race-91",
+        operation_kind=OperationKind.SINGLE_CANCELLATION,
+        sink_mode=ExecutionMode.LIVE,
+        created_monotonic_ns=100,
+        order_id=91,
+        tournament_id="t1",
+    )
+    journal.record_before_dispatch(cancellation, submitted_monotonic_ns=101)
+    journal.mark_state(cancellation.logical_operation_id, LifecycleState.UNCERTAIN, 102)
+    rest = _OpenOrderRecoveryRest()
+    trading = _RecoveryTradingFixture()
+
+    def concurrent_cancel(order_id: int) -> None:
+        assert order_id == 91
+        rest.order_open = False  # Another cancelling request won the race.
+        raise SigNotFoundError(
+            status_code=404,
+            code="NOT_FOUND",
+            safe_message="Order not found.",
+        )
+
+    trading.on_cancel = concurrent_cancel
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, trading),
+        journal=journal,
+        permit=_recovery_permit(),
+        reservations=ExecutionReservationBook(),
+        clock_ns=iter(range(200, 500)).__next__,
+    )
+    try:
+        # A 404 is not proof of settlement or a reason to kill account resync.
+        first = asyncio.run(recover_in_session_cancellations(
+            journal=journal,
+            rest=cast(RecoveryRest, rest),
+            live_sink=sink, tournament_id="t1",
+            clock_ns=iter(range(500, 900)).__next__,
+        ))
+        assert first == ()
+        assert journal.lifecycle_state("cancel-404-race-91") is LifecycleState.RECONCILING
+        assert trading.cancelled_order_ids == [91]
+
+        # The next authoritative read proves closed + complete zero-fill.
+        resolved = asyncio.run(recover_in_session_cancellations(
+            journal=journal,
+            rest=cast(RecoveryRest, rest),
+            live_sink=sink, tournament_id="t1",
+            clock_ns=iter(range(950, 1250)).__next__,
+        ))
+        assert resolved == ("cancel-404-race-91",)
+        assert trading.cancelled_order_ids == [91]  # No extra DELETE.
+        assert journal.lifecycle_state("cancel-404-race-91") is LifecycleState.CANCELLED
+    finally:
+        journal.close()

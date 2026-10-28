@@ -1375,7 +1375,17 @@ async def _recover_single_cancel(
             order_id=order_id,
             tournament_id=envelope.tournament_id,
         )
-        await live_sink.cancel(retry_envelope)
+        try:
+            await live_sink.cancel(retry_envelope)
+        except SigApiError as exc:
+            if exc.status_code != 404:
+                raise
+            # The original order was open in the initial GET, but another
+            # cancel may have completed before this DELETE. SIG then reports
+            # 404 ("Order not found"). Do not abort the entire authoritative
+            # account refresh and do not mark this operation completed from
+            # a 404: the next retry must prove order closure and complete fills.
+            return
         order = await read_order_with_fallback(
             rest,
             order_id,
