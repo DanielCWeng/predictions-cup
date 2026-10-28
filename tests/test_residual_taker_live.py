@@ -682,6 +682,7 @@ def test_rotation_exit_reuses_build009_and_requires_risk_proof(
             return True
 
     class OnlyCandidate:
+        min_rotation_gain = 5.0
         def __init__(self, candidate: RankedRotation) -> None:
             self.candidate = candidate
 
@@ -790,6 +791,7 @@ def test_rotation_exit_rejects_stale_depth_before_any_order() -> None:
         ), "BUY",
     )
     class OnlyCandidate:
+        min_rotation_gain = 5.0
         def rank(self, *, now_ns: int, limit: int) -> tuple[RankedRotation, ...]:
             return (candidate,)
     h.coordinator._rotation_allocator = cast("LiquidityWeightedAllocator", OnlyCandidate())
@@ -820,7 +822,9 @@ def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
     from predictions_cup.execution.journal import ExecutionJournal
     from predictions_cup.execution.models import OperationKind
     from predictions_cup.maker.liquidity_allocator import (
-        EntryTier, LiquidityWeightedAllocator, RankedEntry,
+        EntryTier,
+        LiquidityWeightedAllocator,
+        RankedEntry,
     )
     from predictions_cup.maker.residual_live import _PendingRotationEntry
     from predictions_cup.risk.capital import CapitalRiskState
