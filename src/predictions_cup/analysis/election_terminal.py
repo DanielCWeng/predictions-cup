@@ -10,8 +10,9 @@ requested quantity; this module neither collects quotes nor sends orders.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, Mapping
+from typing import Literal
 
 Side = Literal["YES", "NO"]
 TradeAction = Literal["BUY", "SELL"]
