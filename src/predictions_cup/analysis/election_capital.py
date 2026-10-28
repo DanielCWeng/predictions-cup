@@ -128,8 +128,15 @@ async def scan_capital(*, max_positions: int, size_limit: int, depth: int) -> di
         )
         if account.balance is None:
             raise ValueError("missing account balance")
+        unsettled = tuple(
+            p for p in portfolio.positions if not p.settled and p.quantity != 0
+        )
+        all_shares_payout_ceiling = (
+            Decimal(account.balance)
+            + sum((abs(Decimal(p.quantity)) for p in unsettled), ZERO)
+        )
         positions = sorted(
-            (p for p in portfolio.positions if not p.settled and p.quantity != 0),
+            unsettled,
             key=lambda p: abs(Decimal(p.market_value)), reverse=True,
         )[:max_positions]
         estimates: list[dict[str, object]] = []
@@ -153,6 +160,13 @@ async def scan_capital(*, max_positions: int, size_limit: int, depth: int) -> di
         "capital_is_spendable": False,
         "leaderboard_my_rank": standings.my_rank,
         "leaderboard_target_marked_balance": str(first_target),
+        "all_current_holdings_win_theoretical_ceiling": str(
+            all_shares_payout_ceiling
+        ),
+        "assumes_all_current_holdings_win_without_joint_consistency_check": True,
+        "current_holdings_cannot_reach_present_leader_even_if_all_win": (
+            all_shares_payout_ceiling < first_target
+        ),
         "approximate_target_gap": str(
             first_target - Decimal(account.balance)
             - Decimal(portfolio.summary.total_market_value)
