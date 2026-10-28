@@ -812,8 +812,10 @@ def test_rotation_exit_rejects_stale_depth_before_any_order() -> None:
 
 
 @pytest.mark.parametrize("direction,tick", [("BUY", 140), ("SELL", 139)])
+@pytest.mark.parametrize("already_acquired", [0, 50])
 def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
     monkeypatch: pytest.MonkeyPatch, direction: str, tick: int,
+    already_acquired: int,
 ) -> None:
     """A real entry follows reconciled exit fills, not a placement ACK."""
     from types import SimpleNamespace
@@ -851,8 +853,15 @@ def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
     ]
     harness.journal = journal
     harness.coordinator._journal = cast(ExecutionJournal, journal)
+    entry_existing = () if already_acquired == 0 else (
+        RuntimePosition(
+            EXCHANGE, MARKET, TOURNAMENT, already_acquired,
+            already_acquired if direction == "BUY" else -already_acquired,
+        ),
+    )
     portfolio = RuntimePortfolio(
-        positions=(RuntimePosition("old", "oldmarket", TOURNAMENT, 50, 50),),
+        positions=(RuntimePosition("old", "oldmarket", TOURNAMENT, 50, 50),)
+        + entry_existing,
         orders=(), account_trusted=True,
         account_trust_grade=AccountTrustGrade.TRUSTED,
     )
@@ -911,9 +920,14 @@ def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
     monkeypatch.setattr(residual_live_module, "evaluate_risk", approve)
     change = MakerStateChange("reinvest", NOW, frozenset({EXCHANGE}))
     events = asyncio.run(harness.coordinator._execute_rotation_entry(change, snapshot))
-    assert len(events) == 2
-    assert len(harness.plans) == 1 and len(harness.cancels) == 1
-    assert journal.claims == {"rotation-123:entry"}
+    if already_acquired:
+        assert events == ()
+        assert not harness.plans and not harness.cancels
+        assert journal.claims == set()
+    else:
+        assert len(events) == 2
+        assert len(harness.plans) == 1 and len(harness.cancels) == 1
+        assert journal.claims == {"rotation-123:entry"}
     assert EXCHANGE not in harness.coordinator._rotation_pending_entries
 
 
@@ -954,3 +968,119 @@ def test_rotation_reinvestment_rejects_unattributed_exit_without_order() -> None
     change = MakerStateChange("wrong-fills", NOW, frozenset({EXCHANGE}))
     assert asyncio.run(harness.coordinator._execute_rotation_entry(change, snap)) == ()
     assert not harness.plans
+
+
+def test_pending_rotation_prioritises_selected_entry_over_unrelated_taker() -> None:
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries["other-entry"] = _PendingRotationEntry(
+        "prior:exit", "prior", "other-entry", "BUY", TOURNAMENT,
+        50, 50, .01, NOW - 5, NOW - 10,
+    )
+    harness.run(_snapshot())
+    assert harness.plans == []
+    assert harness.coordinator._skipped_signals["rotation_capacity_priority"] == 1
+
+
+def test_pending_rotation_permits_selected_replacement_taker() -> None:
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries[EXCHANGE] = _PendingRotationEntry(
+        "prior:exit", "prior", EXCHANGE, "BUY", TOURNAMENT,
+        50, 50, .01, NOW - 5, NOW - 10,
+    )
+    harness.run(_snapshot())
+    assert len(harness.plans) == 1
+    assert harness.coordinator._skipped_signals["rotation_capacity_priority"] == 0
+
+
+def test_rotation_capital_priority_expires_automatically() -> None:
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries["other-entry"] = _PendingRotationEntry(
+        "prior:exit", "prior", "other-entry", "BUY", TOURNAMENT,
+        50, 50, .01, NOW - 5, NOW - 75_000_000_001,
+    )
+    harness.run(_snapshot())
+    assert len(harness.plans) == 1
+
+
+def test_rotation_capital_redirect_requires_higher_executable_ev() -> None:
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.maker.liquidity_allocator import (
+        EntryTier,
+        LiquidityWeightedAllocator,
+        RankedEntry,
+    )
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries["target"] = _PendingRotationEntry(
+        "exit:exit", "held", "target", "BUY", TOURNAMENT,
+        50, 50, .005, NOW - 5, NOW - 10,
+    )
+    allocator = SimpleNamespace(
+        entries={"target": RankedEntry(
+            "target", "target-market", "BUY", NOW,
+            (EntryTier(50, .04),),
+        )},
+        max_age_ns=1_000_000_000, rotation_buffer=.015,
+    )
+    harness.coordinator._rotation_allocator = cast(LiquidityWeightedAllocator, allocator)
+    check = harness.coordinator._rotation_alternative_beats_target
+    assert check(net_per_share=.045, quantity=50, now_ns=NOW) is None
+    assert check(net_per_share=.054, quantity=50, now_ns=NOW) is None
+    assert check(net_per_share=.056, quantity=50, now_ns=NOW) == "target"
+    assert check(net_per_share=None, quantity=50, now_ns=NOW) is None
+
+
+def test_capital_headroom_clips_to_remaining_gross_and_market_capacity() -> None:
+    harness = _Harness()
+    snapshot = _snapshot()
+    held = RuntimePortfolio(
+        positions=(
+            RuntimePosition(EXCHANGE, MARKET, TOURNAMENT, 50, 50),
+        ),
+        orders=(), account_trusted=True,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=held))
+    base = _risk()
+    assert base.limits is not None
+    limits = replace(
+        base.limits,
+        max_gross_exposure=70.0,
+        max_per_market_exposure=55.0,
+    )
+    context = replace(base, limits=limits)
+    assert harness.coordinator._capital_headroom_quantity(snapshot, context, 50) == 5
+    assert harness.coordinator._capital_headroom_quantity(snapshot, context, 3) == 3
+
+
+def test_capital_headroom_respects_tournament_capacity() -> None:
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.risk.capital import CapitalRiskState
+
+    harness = _Harness()
+    snapshot = _snapshot()
+    base = _risk()
+    assert base.limits is not None
+    limits = replace(
+        base.limits,
+        max_tournament_exposure=100.0,
+    )
+    capital = cast(CapitalRiskState, SimpleNamespace(
+        exposure=SimpleNamespace(tournament=lambda _tournament: 96.0),
+    ))
+    context = replace(base, limits=limits, capital_state=capital)
+    assert harness.coordinator._capital_headroom_quantity(snapshot, context, 50) == 4
