@@ -6,7 +6,9 @@ import asyncio
 import json
 import logging
 import random
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import TracebackType
@@ -88,6 +90,11 @@ class SigTradingClient:
         if keepalive_expiry_seconds <= 0:
             raise ValueError("keepalive_expiry_seconds must be positive")
         self._governor = governor
+        # Routine maker placements use NORMAL.  The taker explicitly
+        # requests HIGH; cancellations always override to HIGH.
+        self._priority: ContextVar[RestPriority] = ContextVar(
+            "sig_write_priority", default=RestPriority.NORMAL
+        )
         self._retry_policy = retry_policy or RetryPolicy()
         self._request_in_flight_wait_seconds = request_in_flight_wait_seconds
         self._timeout_seconds = timeout_seconds
@@ -122,6 +129,14 @@ class SigTradingClient:
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    @asynccontextmanager
+    async def priority(self, priority: RestPriority) -> AsyncIterator[None]:
+        token = self._priority.set(priority)
+        try:
+            yield
+        finally:
+            self._priority.reset(token)
 
     async def place_order(self, request: SingleOrderRequestDto) -> SingleOrderResponseDto:
         status, payload = await self._request_json(
@@ -300,7 +315,14 @@ class SigTradingClient:
             else self._timeout_seconds
         )
         for attempt in range(1, policy.max_attempts + 1):
-            await self._governor.acquire(RestPriority.HIGH)
+            # Order cancellation and cleanup must never queue behind
+            # opportunistic taker submissions or ordinary maker placements.
+            priority = (
+                RestPriority.HIGH
+                if method == "DELETE" or path == "orders/cancel-all"
+                else self._priority.get()
+            )
+            await self._governor.acquire(priority)
             try:
                 if resolved_content is not None:
                     response = await self._client.request(

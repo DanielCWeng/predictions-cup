@@ -109,7 +109,9 @@ class ResidualTakerSignal:
         self.cooldown_ns = cooldown_ns
         self._last_signal: dict[tuple[str, str], int] = {}
 
-    def on_state(self, state: ResidualInput) -> ResidualSignal | None:
+    def on_state(
+        self, state: ResidualInput, *, commit_cooldown: bool = True
+    ) -> ResidualSignal | None:
         if self.tracked_exchange_ids and state.exchange_id not in self.tracked_exchange_ids:
             return None
         if not state.exchange_id or state.observed_monotonic_ns < 0:
@@ -156,7 +158,8 @@ class ResidualTakerSignal:
         last = self._last_signal.get(key)
         if last is not None and state.observed_monotonic_ns - last < self.cooldown_ns:
             return None
-        self._last_signal[key] = state.observed_monotonic_ns
+        if commit_cooldown:
+            self._last_signal[key] = state.observed_monotonic_ns
         return ResidualSignal(
             exchange_id=state.exchange_id,
             direction=direction,
@@ -169,6 +172,19 @@ class ResidualTakerSignal:
             pm_spread=pm_spread,
             observed_monotonic_ns=state.observed_monotonic_ns,
         )
+
+    def record_submission(self, signal: ResidualSignal) -> None:
+        """Throttle only attempted orders, not signals rejected before dispatch.
+
+        Call synchronously after reserving an approved execution plan and before
+        awaiting its dispatch. This preserves the frozen replay's signal-level
+        cooldown (the on_state default) while avoiding live dead time when an
+        economics, inventory, quote or RISK-002 gate rejects a candidate.
+        """
+        key = (signal.exchange_id, signal.direction)
+        previous = self._last_signal.get(key)
+        if previous is None or signal.observed_monotonic_ns >= previous:
+            self._last_signal[key] = signal.observed_monotonic_ns
 
 
 def residual_input_from_snapshot(
