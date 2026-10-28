@@ -97,11 +97,6 @@ def test_readonly_capture_preserves_signed_position_and_raw_cash() -> None:
     async def no_wait(seconds: float) -> None:
         pauses.append(seconds)
 
-    result = asyncio.run(capture_election_sig_snapshot(
-        reader, mapping=MAPPING, races=("Maine",),
-        tournament_id="cup-test", tournament_slug="the-cup",
-        pause=no_wait,
-    )) if False else None
     # The true mapping ID must match. Use an isolated copy to keep the
     # synthetic tournament fixture independent of live competition IDs.
     mapping = dict(MAPPING)
