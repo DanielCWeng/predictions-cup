@@ -13,8 +13,9 @@ import math
 from collections import Counter
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import suppress
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import cast
 
 from predictions_cup.execution.journal import ExecutionJournal
@@ -81,6 +82,22 @@ _RESTING_STATES = {
     LifecycleState.OPEN,
     LifecycleState.PARTIALLY_FILLED,
 }
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingRotationEntry:
+    """One exit can finance at most one independently priced replacement."""
+
+    exit_operation_id: str
+    exit_exchange_id: str
+    entry_exchange_id: str
+    entry_direction: str
+    tournament_id: str
+    before_signed: int
+    exit_shares: int
+    exit_concession_per_share: float
+    exit_account_observed_ns: int
+    created_ns: int
 
 
 def rotation_mapped_token(record: MarketMapping | None) -> str | None:
@@ -185,6 +202,8 @@ class ResidualTakerLiveCoordinator:
         self._rotation_pending: dict[str, tuple[RankedRotation, int]] = {}
         self._rotation_last_request_ns: dict[str, int] = {}
         self._rotation_last_exit_ns: dict[str, int] = {}
+        self._rotation_pending_entries: dict[str, _PendingRotationEntry] = {}
+        self._rotation_last_entry_request_ns: dict[str, int] = {}
         self._rotation_evidence = RotationEvidenceCache()
         self._rotation_last_rank_ns = 0
         self._allow_bbo_proxy = allow_bbo_proxy
@@ -276,6 +295,21 @@ class ResidualTakerLiveCoordinator:
             ),
         )
         now_ns = snapshot.now_monotonic_ns
+        # Revisit replacements as trusted account and book updates arrive.
+        # The original exit signal never grants permission to place an entry.
+        for eid, pending in tuple(self._rotation_pending_entries.items()):
+            if now_ns < pending.created_ns or now_ns - pending.created_ns > 180_000_000_000:
+                self._rotation_pending_entries.pop(eid, None)
+                continue
+            if (
+                trusted
+                and self._request_rotation_recheck is not None
+                and now_ns - self._rotation_last_entry_request_ns.get(
+                    eid, -10_000_000_000
+                ) >= 2_000_000_000
+            ):
+                self._rotation_last_entry_request_ns[eid] = now_ns
+                self._request_rotation_recheck(frozenset({eid}))
         if not trusted or not allocator.entries or not allocator.exits:
             self._rotation_pending.clear()
             if self._rotation_reduce_only_targets is not None:
@@ -424,6 +458,11 @@ class ResidualTakerLiveCoordinator:
                     risk_state_trusted=risk_ready,
                 )
                 self._capture_rotation(snapshot, risk_ready=risk_ready)
+                if self._active_rotation_exits and exchange_id in self._rotation_pending_entries:
+                    entered = await self._execute_rotation_entry(change, snapshot)
+                    if entered:
+                        events.extend(entered)
+                        continue
                 pending = self._rotation_pending.get(exchange_id)
                 if self._active_rotation_exits and pending is not None:
                     proposed, proposed_ns = pending
@@ -717,6 +756,28 @@ class ResidualTakerLiveCoordinator:
         cancelled = await self._cancel_remainder(plan, event, snapshot.tournament_id)
         if cancelled is not None:
             result.append(cancelled)
+        # Do not count a returned ACK as released capital: the new trusted
+        # portfolio and operation-attributed journal fills must agree first.
+        if (
+            event.state not in {LifecycleState.REJECTED, LifecycleState.UNCERTAIN}
+            and (cancelled is None or cancelled.state is not LifecycleState.UNCERTAIN)
+            and fresh.assessment.replacement_exchange_id not in self._rotation_pending_entries
+        ):
+            entry_id = fresh.assessment.replacement_exchange_id
+            self._rotation_pending_entries[entry_id] = _PendingRotationEntry(
+                exit_operation_id=plan.envelope.logical_operation_id,
+                exit_exchange_id=eid,
+                entry_exchange_id=entry_id,
+                entry_direction=fresh.entry_direction,
+                tournament_id=snapshot.tournament_id,
+                before_signed=int(signed),
+                exit_shares=quantity,
+                exit_concession_per_share=revised.exit_concession / quantity,
+                exit_account_observed_ns=snapshot.account_observed_ns,
+                created_ns=now,
+            )
+            if self._request_rotation_recheck is not None:
+                self._request_rotation_recheck(frozenset({entry_id}))
         return tuple(result)
 
     def _capped_quantity(
