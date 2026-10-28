@@ -780,6 +780,212 @@ class ResidualTakerLiveCoordinator:
                 self._request_rotation_recheck(frozenset({entry_id}))
         return tuple(result)
 
+
+    async def _execute_rotation_entry(
+        self,
+        change: MakerStateChange,
+        snapshot: MakerMarketSnapshot,
+    ) -> tuple[ExecutionEvent, ...]:
+        """Reinvest actual exit fills at fresh executable prices, never an ACK."""
+        eid = snapshot.exchange_id
+        pending = self._rotation_pending_entries.get(eid)
+        allocator = self._rotation_allocator
+        if pending is None or allocator is None or self._kill_switch.active:
+            return ()
+        now = snapshot.now_monotonic_ns
+        if now < pending.created_ns or now - pending.created_ns > 180_000_000_000:
+            self._rotation_pending_entries.pop(eid, None)
+            return ()
+        portfolio = snapshot.runtime.portfolio
+        if (
+            snapshot.account_observed_ns <= pending.exit_account_observed_ns
+            or not portfolio.account_trusted
+            or portfolio.trust_grade is not AccountTrustGrade.TRUSTED
+            or portfolio.account_proxy_uncertainty != 0
+            or any(order.uncertain for order in portfolio.orders)
+            or any(order.open and order.exchange_id in (
+                pending.exit_exchange_id, eid
+            ) for order in portfolio.orders)
+            or rotation_mapped_token(self._mapping.get(eid)) is None
+        ):
+            return ()
+        after = portfolio.signed_inventory(
+            pending.exit_exchange_id, pending.tournament_id
+        )
+        if not math.isfinite(after) or after != math.trunc(after):
+            return ()
+        if pending.before_signed > 0:
+            filled = pending.before_signed - int(after)
+            reduced = 0 <= int(after) <= pending.before_signed
+        else:
+            filled = int(after) - pending.before_signed
+            reduced = pending.before_signed <= int(after) <= 0
+        if not reduced or not 0 < filled <= pending.exit_shares:
+            return ()
+        # Journal de-duplicates realtime and authoritative fill reports.
+        # Every share in the new account position delta must be attributable
+        # to THIS exit, not an unrelated maker fill on the same instrument.
+        journal_shares = Decimal(0)
+        saw_fill = False
+        for evt in self._journal.events(pending.exit_operation_id):
+            if evt.event_type not in {"REALTIME_FILL", "AUTHORITATIVE_FILL"}:
+                continue
+            if evt.exchange_id != pending.exit_exchange_id or evt.quantity is None:
+                return ()
+            try:
+                amount = abs(Decimal(evt.quantity))
+            except (InvalidOperation, ValueError):
+                return ()
+            if not amount.is_finite() or amount <= 0:
+                return ()
+            journal_shares += amount
+            saw_fill = True
+        if not saw_fill or journal_shares != filled:
+            return ()
+        if not snapshot.sig_depth_trusted or not snapshot.sig_bbo_trusted:
+            return ()
+        book = snapshot.runtime.book(eid)
+        age = now - (snapshot.sig_depth_observed_ns or now + 1)
+        bbo_age = now - snapshot.sig_bbo_observed_ns
+        max_age = (
+            self._max_sig_stream_depth_age_ns
+            if snapshot.sig_stream_depth_corroborated
+            else self._max_sig_depth_age_ns
+        )
+        if (
+            book is None or not book.trusted_depth
+            or not 0 <= age <= max_age
+            or not 0 <= bbo_age <= self._max_sig_bbo_age_ns
+        ):
+            return ()
+        entry = allocator.entries.get(eid)
+        if entry is None or now - entry.observed_ns > allocator.max_age_ns:
+            return ()
+        action = OrderAction.BUY if entry.direction == "BUY" else OrderAction.SELL
+        if entry.direction not in {"BUY", "SELL"}:
+            return ()
+        context = (
+            self._risk_context_source()
+            if callable(self._risk_context_source)
+            else self._risk_context_source
+        )
+        capital = context.capital_state
+        if (
+            context.mode is not ExecutionMode.LIVE
+            or context.kill_switch
+            or capital is None
+            or not capital.reconciliation_complete
+            or not capital.account_trusted
+            or not capital.exposure.trusted
+            or capital.exposure.uncertain_order_exposure != 0
+        ):
+            return ()
+        limits = [item for item in (
+            context.limits,
+            None if context.profile is None else context.profile.limits,
+            None if context.profile is None else context.profile.hard_limits,
+        ) if item is not None]
+        if not limits:
+            return ()
+        quantity = min(
+            filled, entry.capacity,
+            *(item.max_order_size for item in limits),
+            *(max(0, math.floor(
+                item.max_open_order_exposure - portfolio.open_order_exposure
+            )) for item in limits),
+        )
+        if quantity < 1:
+            return ()
+        levels = book.asks if action is OrderAction.BUY else book.bids
+        remaining = quantity
+        ticks = None
+        for level in levels:
+            if not math.isfinite(level.quantity) or level.quantity <= 0:
+                return ()
+            remaining -= min(remaining, math.floor(level.quantity))
+            ticks = level.price_ticks
+            if remaining <= 0:
+                break
+        if remaining > 0 or ticks is None or not 1 <= ticks <= 199:
+            return ()
+        entry_ev = entry.net_ev(quantity)
+        if entry_ev is None:
+            return ()
+        gain = entry_ev - quantity * (
+            pending.exit_concession_per_share
+            + allocator.exit_fee + allocator.rotation_buffer
+        )
+        if gain < allocator.min_rotation_gain or not math.isfinite(gain):
+            self._skipped_signals["rotation_entry_ev_disappeared"] += 1
+            return ()
+        if self._crosses_own_quote(eid, action, ticks):
+            return ()
+        opportunity = Opportunity(
+            family=StrategyFamily.FV_TAKE,
+            strategy_id="rotation-entry-v1",
+            legs=(CandidateLeg(
+                exchange_id=eid,
+                market_id=snapshot.market_id,
+                tournament_id=snapshot.tournament_id,
+                outcome_side=OutcomeSide.YES,
+                action=action,
+                quantity=quantity,
+                limit_price_ticks=ticks,
+            ),),
+            gross_edge=gain / quantity,
+            fair_value=None,
+            decision_observation_ns=now,
+        )
+        approval = evaluate_risk(
+            opportunity,
+            self._reservations.overlay_snapshot(snapshot.runtime),
+            replace(context, kill_switch=context.kill_switch or self._kill_switch.active),
+        )
+        if not approval.approved:
+            self._skipped_signals["rotation_entry_risk_" + approval.reason] += 1
+            return ()
+        operation_id = pending.exit_operation_id.removesuffix(":exit") + ":entry"
+        if not self._journal.claim_rotation_operation(
+            operation_id, snapshot.tournament_id
+        ):
+            self._rotation_pending_entries.pop(eid, None)
+            return ()
+        plan = build_execution_plan(
+            approval,
+            logical_operation_id=operation_id,
+            created_monotonic_ns=change.observed_monotonic_ns,
+        )
+        self._reservations.reserve(operation_id, plan.intents)
+        self._rotation_pending_entries.pop(eid, None)
+        _LOG.info(
+            "ROTATION entry placing exchange=%s shares=%d direction=%s "
+            "limit=%d net_incremental_gain=%.3f after_attributed_exit=%s",
+            eid, quantity, entry.direction, ticks, gain, pending.exit_operation_id,
+        )
+        try:
+            event = await self._dispatch(plan)
+        except SigExecutionUncertainError:
+            return (ExecutionEvent(
+                logical_operation_id=operation_id,
+                state=LifecycleState.UNCERTAIN,
+                observed_monotonic_ns=now,
+                simulated=False,
+                detail="rotation_entry_uncertain",
+            ),)
+        except SigApiError as exc:
+            return (ExecutionEvent(
+                logical_operation_id=operation_id,
+                state=LifecycleState.REJECTED,
+                observed_monotonic_ns=now,
+                simulated=False,
+                detail=type(exc).__name__,
+            ),)
+        results = [event]
+        cancelled = await self._cancel_remainder(plan, event, snapshot.tournament_id)
+        if cancelled is not None:
+            results.append(cancelled)
+        return tuple(results)
+
     def _capped_quantity(
         self,
         snapshot: MakerMarketSnapshot,
