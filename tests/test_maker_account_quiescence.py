@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from types import MethodType
+from typing import Any, cast
 
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 
@@ -25,7 +26,7 @@ def test_account_snapshot_waits_for_inflight_cycle_then_blocks_new_cycle() -> No
             entered_cycle.set()
             await release_cycle.wait()
 
-        setattr(runtime, "_drain_once_under_gate", MethodType(decision_cycle, runtime))
+        cast(Any, runtime)._drain_once_under_gate = MethodType(decision_cycle, runtime)
         live_cycle = asyncio.create_task(runtime._drain_once())
         await entered_cycle.wait()
 
