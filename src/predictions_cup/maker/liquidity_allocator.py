@@ -300,8 +300,11 @@ class LiquidityWeightedAllocator:
         for eid, item in tuple(self.entries.items()):
             if now_ns < item.observed_ns or now_ns - item.observed_ns > self.max_age_ns:
                 del self.entries[eid]
-        for eid, item in tuple(self.exits.items()):
-            if now_ns < item.observed_ns or now_ns - item.observed_ns > self.max_age_ns:
+        for eid, exit_state in tuple(self.exits.items()):
+            if (
+                now_ns < exit_state.observed_ns
+                or now_ns - exit_state.observed_ns > self.max_age_ns
+            ):
                 del self.exits[eid]
 
     def rank(self, *, now_ns: int | None = None, limit: int = 3) -> tuple[RankedRotation, ...]:

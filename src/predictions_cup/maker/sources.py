@@ -483,6 +483,7 @@ class MakerSourceBridge:
                 ),
                 observed_ns,
                 depth_current and bool(bids) and bool(asks)
+                and last_rest is not None
                 and (last_realtime is None or last_rest >= last_realtime),
                 observed_ns,
                 depth_trusted_now,

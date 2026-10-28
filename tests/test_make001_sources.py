@@ -855,8 +855,12 @@ def test_corrob_stream_depth_requires_fresh_feed_matching_scalar_and_unexpired_b
             portfolio=RuntimePortfolio(account_trusted=True)),
         polymarket_books=_PmBooks({"yes-token": _pm_snapshot(scalar_at)}))
     def snapshot(at: datetime = wall_now) -> MakerMarketSnapshot:
-        return bridge.build("36", wall_now=at, monotonic_now_ns=20_000_000_000,
-                            polymarket_feed_trusted=True)
+        result = bridge.build(
+            "36", wall_now=at, monotonic_now_ns=20_000_000_000,
+            polymarket_feed_trusted=True,
+        )
+        assert result is not None
+        return result
     good = snapshot()
     assert good.sig_depth_trusted and good.sig_stream_depth_corroborated
     assert good.sig_depth_observed_ns == 16_000_000_000
