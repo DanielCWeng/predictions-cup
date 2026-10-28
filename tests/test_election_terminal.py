@@ -9,6 +9,7 @@ import pytest
 from predictions_cup.analysis.election_terminal import (
     ExecutableTrade,
     Holding,
+    PlanScore,
     ProbabilityView,
     SettlementScenario,
     TradePlan,
@@ -52,7 +53,7 @@ def _score(
     holdings: tuple[Holding, ...] = (),
     cash: float = 100.0,
     target: float = 139.0,
-) -> tuple:
+) -> tuple[PlanScore, ...]:
     return evaluate_trade_plans(
         scenarios=scenarios if scenarios is not None else _scenarios(),
         probability_views=models if models is not None else _views(),
