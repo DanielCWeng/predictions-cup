@@ -60,7 +60,7 @@ def select_watchlist(
             raise ValueError("invalid market mapping entry")
         title = item.get("sig_market_title", "")
         if not isinstance(title, str) or not any(
-            re.search(rf"\\b{re.escape(race)} senate\\b", title, re.IGNORECASE)
+            re.search(rf"\b{re.escape(race)} senate\b", title, re.IGNORECASE)
             for race in races
         ):
             continue
