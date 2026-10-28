@@ -11,13 +11,13 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-
-from predictions_cup.sig.dto import AccountDto, OrderBookSnapshotDto
-from predictions_cup.sig.trading_dto import OrderReadDto, PositionsResponseDto
 from scripts.ops.sig_election_snapshot import (
     capture_election_sig_snapshot,
     select_watchlist,
 )
+
+from predictions_cup.sig.dto import AccountDto, OrderBookSnapshotDto
+from predictions_cup.sig.trading_dto import OrderReadDto, PositionsResponseDto
 
 MAPPING = json.loads(Path("data/mappings/sig_polymarket_2026.json").read_text())
 
