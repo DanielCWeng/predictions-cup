@@ -1192,10 +1192,20 @@ class MakerService:
                 adapter.set_cancel_uncertainty_resolver(reconcile_uncertain_cancels)
                 adapter.enable_background_cancel_recovery()
 
+            async def account_resync_with_quiet_maker() -> AccountAuthoritativeSnapshot:
+                # A continuous maker quote/cancel stream can otherwise
+                # invalidate every REST account snapshot. This narrow lock
+                # waits for an in-flight maker/taker decision cycle to finish,
+                # then holds only new decision cycles while the authoritative
+                # account and recovery reads complete. No risk check is relaxed.
+                assert runtime is not None
+                async with runtime.quiet_for_account_snapshot():
+                    return await account_resync()
+
             account_controller = AccountRealtimeController(
                 state=account_state,
                 mint_token=rest.mint_realtime_token,
-                authoritative_resync=account_resync,
+                authoritative_resync=account_resync_with_quiet_maker,
                 refresh_interval_seconds=(self.settings.maker_account_refresh_interval_seconds),
                 execution_journal=journal,
                 observation_emitter=observation_emitter,
