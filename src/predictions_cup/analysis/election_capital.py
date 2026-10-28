@@ -113,6 +113,18 @@ async def scan_capital(*, max_positions: int, size_limit: int, depth: int) -> di
     async with SigRestClient(settings) as api:
         account = await api.get_account()
         portfolio = await api.get_tournament_positions(settings.tournament_slug)
+        standings = await api.get_tournament_leaderboard(
+            settings.tournament_slug, period="all", limit=1
+        )
+        tournaments = await api.list_tournaments(limit=100)
+        tournament = next(
+            (x for x in tournaments.data if x.id == settings.tournament_id), None
+        )
+        if tournament is None or not standings.leaderboard:
+            raise ValueError("tournament initial balance or leaderboard unavailable")
+        first_target = (
+            Decimal(tournament.initial_balance) + Decimal(standings.leaderboard[0].pnl)
+        )
         if account.balance is None:
             raise ValueError("missing account balance")
         positions = sorted(
@@ -138,6 +150,13 @@ async def scan_capital(*, max_positions: int, size_limit: int, depth: int) -> di
             Decimal(account.balance) + Decimal(portfolio.summary.total_market_value)
         ),
         "capital_is_spendable": False,
+        "leaderboard_my_rank": standings.my_rank,
+        "leaderboard_target_marked_balance": str(first_target),
+        "approximate_target_gap": str(
+            first_target - Decimal(account.balance)
+            - Decimal(portfolio.summary.total_market_value)
+        ),
+        "leaderboard_is_provisional": True,
         "fee_reserve_per_share": "0.02",
         "max_shares_evaluated_per_position": size_limit,
         "estimates": estimates,
