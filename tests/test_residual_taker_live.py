@@ -807,3 +807,146 @@ def test_rotation_exit_rejects_stale_depth_before_any_order() -> None:
     change = MakerStateChange("rotation-stale", NOW, frozenset({EXCHANGE}))
     assert asyncio.run(h.coordinator._execute_rotation_exit(change, snap, candidate)) == ()
     assert not h.plans
+
+
+@pytest.mark.parametrize("direction,tick", [("BUY", 140), ("SELL", 139)])
+def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
+    monkeypatch: pytest.MonkeyPatch, direction: str, tick: int,
+) -> None:
+    """A real entry follows reconciled exit fills, not a placement ACK."""
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.execution.journal import ExecutionJournal
+    from predictions_cup.execution.models import OperationKind
+    from predictions_cup.maker.liquidity_allocator import (
+        EntryTier, LiquidityWeightedAllocator, RankedEntry,
+    )
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+    from predictions_cup.risk.capital import CapitalRiskState
+    from predictions_cup.risk.core import RiskDecision
+    from predictions_cup.strategy.core import Opportunity, StrategyFamily
+
+    class ClaimedJournal(_Journal):
+        def __init__(self) -> None:
+            super().__init__()
+            self.claims: set[str] = set()
+
+        def claim_rotation_operation(self, op: str, tournament: str) -> bool:
+            if op in self.claims or tournament != TOURNAMENT:
+                return False
+            self.claims.add(op)
+            return True
+
+    harness = _Harness()
+    journal = ClaimedJournal()
+    journal.by_operation["rotation-123:exit"] = [
+        cast(_JournalEvent, SimpleNamespace(
+            event_type="REALTIME_FILL", exchange_id="old", quantity="50",
+        ))
+    ]
+    harness.journal = journal
+    harness.coordinator._journal = cast(ExecutionJournal, journal)
+    portfolio = RuntimePortfolio(
+        positions=(RuntimePosition("old", "oldmarket", TOURNAMENT, 50, 50),),
+        orders=(), account_trusted=True,
+        account_trust_grade=AccountTrustGrade.TRUSTED,
+    )
+    snapshot = _snapshot()
+    snapshot = replace(
+        snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio),
+        account_observed_ns=NOW,
+    )
+    harness.coordinator._rotation_pending_entries[EXCHANGE] = _PendingRotationEntry(
+        "rotation-123:exit", "old", EXCHANGE, direction, TOURNAMENT,
+        100, 50, .005, NOW - 5, NOW - 10,
+    )
+    allocator = SimpleNamespace(
+        entries={EXCHANGE: RankedEntry(
+            EXCHANGE, MARKET, direction, NOW, (EntryTier(50, .12),)
+        )},
+        max_age_ns=5_000_000_000,
+        exit_fee=.005,
+        rotation_buffer=.015,
+        min_rotation_gain=1.0,
+    )
+    harness.coordinator._rotation_allocator = cast(LiquidityWeightedAllocator, allocator)
+    capital = SimpleNamespace(
+        account_trusted=True, reconciliation_complete=True,
+        exposure=SimpleNamespace(trusted=True, uncertain_order_exposure=0),
+    )
+    harness.coordinator._risk_context_source = replace(
+        _risk(), capital_state=cast(CapitalRiskState, capital)
+    )
+
+    def approve(opportunity: Opportunity, *_args: object) -> RiskDecision:
+        assert opportunity.strategy_id == "rotation-entry-v1"
+        (leg,) = opportunity.legs
+        assert leg.quantity == 50 and leg.limit_price_ticks == tick
+        assert leg.action is (
+            OrderAction.BUY if direction == "BUY" else OrderAction.SELL
+        )
+        intent = RuntimeOrderIntent(
+            intent_id="rotation-entry-test", exchange_id=leg.exchange_id,
+            market_id=leg.market_id, tournament_id=leg.tournament_id,
+            outcome_side=leg.outcome_side, action=leg.action,
+            quantity=leg.quantity, limit_price_ticks=leg.limit_price_ticks,
+            strategy_id=opportunity.strategy_id,
+            decision_observation_ns=opportunity.decision_observation_ns,
+        )
+        return RiskDecision(
+            approved=True, reason="approved", execution_mode=ExecutionMode.LIVE,
+            operation_kind=OperationKind.SINGLE_PLACEMENT, intents=(intent,),
+            strategy_family=StrategyFamily.FV_TAKE.value,
+            strategy_id=opportunity.strategy_id,
+            signal_value=opportunity.gross_edge,
+            fair_value=opportunity.fair_value,
+            decision_observation_ns=opportunity.decision_observation_ns,
+        )
+
+    monkeypatch.setattr(residual_live_module, "evaluate_risk", approve)
+    change = MakerStateChange("reinvest", NOW, frozenset({EXCHANGE}))
+    events = asyncio.run(harness.coordinator._execute_rotation_entry(change, snapshot))
+    assert len(events) == 2
+    assert len(harness.plans) == 1 and len(harness.cancels) == 1
+    assert journal.claims == {"rotation-123:entry"}
+    assert EXCHANGE not in harness.coordinator._rotation_pending_entries
+
+
+def test_rotation_reinvestment_rejects_unattributed_exit_without_order() -> None:
+    """A 49-share journal fill cannot finance 50 shares of replacement."""
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.execution.journal import ExecutionJournal
+    from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    journal = _Journal()
+    journal.by_operation["exit:exit"] = [
+        cast(_JournalEvent, SimpleNamespace(
+            event_type="REALTIME_FILL", exchange_id="old", quantity="49",
+        ))
+    ]
+    harness.coordinator._journal = cast(ExecutionJournal, journal)
+    harness.coordinator._rotation_allocator = cast(
+        LiquidityWeightedAllocator, SimpleNamespace()
+    )
+    harness.coordinator._rotation_pending_entries[EXCHANGE] = _PendingRotationEntry(
+        "exit:exit", "old", EXCHANGE, "BUY", TOURNAMENT,
+        100, 50, 0.0, NOW - 5, NOW - 10,
+    )
+    original = _snapshot()
+    snap = replace(
+        original,
+        runtime=replace(original.runtime, portfolio=RuntimePortfolio(
+            positions=(RuntimePosition("old", "oldmarket", TOURNAMENT, 50, 50),),
+            orders=(), account_trusted=True,
+            account_trust_grade=AccountTrustGrade.TRUSTED,
+        )),
+        account_observed_ns=NOW,
+    )
+    change = MakerStateChange("wrong-fills", NOW, frozenset({EXCHANGE}))
+    assert asyncio.run(harness.coordinator._execute_rotation_entry(change, snap)) == ()
+    assert not harness.plans
