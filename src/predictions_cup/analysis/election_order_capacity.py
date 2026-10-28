@@ -17,7 +17,7 @@ from pathlib import Path
 
 from predictions_cup.config.settings import AppSettings
 from predictions_cup.sig.client import SigRestClient
-from predictions_cup.sig.trading_dto import OrderReadDto
+from predictions_cup.sig.trading_dto import OrderFillsResponseDto, OrderReadDto
 
 ZERO = Decimal("0")
 
@@ -81,9 +81,27 @@ def summarize_open_orders(orders: tuple[OrderReadDto, ...]) -> tuple[OrderNotion
     )
 
 
-async def scan_orders(*, limit: int = 2000) -> dict[str, object]:
-    if not 1 <= limit <= 4000:
-        raise ValueError("bad open-order safety limit")
+def issuer_filled_total(
+    order: OrderReadDto,
+    fills: OrderFillsResponseDto,
+) -> Decimal | None:
+    """Admit only complete and identity-matched issuer fill evidence."""
+    if (
+        fills.order_id != order.id
+        or fills.exchange_id != order.exchange_id
+        or not fills.coverage.complete
+        or fills.pagination.has_more
+        or fills.total_quantity_filled < ZERO
+        or fills.total_quantity_filled > order.quantity
+    ):
+        return None
+    return fills.total_quantity_filled
+
+
+async def scan_orders(*, limit: int = 2000, reconcile_top_buys: int = 0) -> dict[str, object]:
+
+    if not 1 <= limit <= 4000 or not 0 <= reconcile_top_buys <= 12:
+        raise ValueError("invalid bounded audit limits")
     settings = AppSettings(
         trading_enabled=False, execution_mode="SHADOW",
         sig_trade_credential=None, global_kill_switch=True,
@@ -99,6 +117,29 @@ async def scan_orders(*, limit: int = 2000) -> dict[str, object]:
             orders.append(order)
             if len(orders) > limit:
                 raise ValueError("too many orders to audit safely")
+        issuer_checked = 0
+        issuer_confirmed = 0
+        if reconcile_top_buys:
+            ranked = sorted(
+                (
+                    (idx, order) for idx, order in enumerate(orders)
+                    if order.open and order.action == "buy"
+                    and order.price_limit is not None
+                    and order.quantity_filled is None
+                ),
+                key=lambda item: item[1].quantity * (item[1].price_limit or ZERO),
+                reverse=True,
+            )[:reconcile_top_buys]
+            for idx, order in ranked:
+                await asyncio.sleep(0.75)
+                fills = await rest.get_order_fills(order.id, limit=200)
+                issuer_checked += 1
+                confirmed = issuer_filled_total(order, fills)
+                if confirmed is not None:
+                    orders[idx] = order.model_copy(
+                        update={"quantity_filled": confirmed}
+                    )
+                    issuer_confirmed += 1
     rows = summarize_open_orders(tuple(orders))
     return {
         "mode": "READ_ONLY_ORDER_CAPACITY_SURVEY",
@@ -107,6 +148,8 @@ async def scan_orders(*, limit: int = 2000) -> dict[str, object]:
         "raw_cash": str(account.balance),
         "cash_is_spendable": False,
         "open_orders": sum(x.open_orders for x in rows),
+        "issuer_fill_endpoints_checked": issuer_checked,
+        "issuer_fill_endpoints_confirmed": issuer_confirmed,
         "indicative_open_buy_notional": str(sum(
             (Decimal(x.indicative_buy_notional) for x in rows), ZERO
         )),
@@ -129,13 +172,14 @@ async def scan_orders(*, limit: int = 2000) -> dict[str, object]:
 def main() -> int:
     p = argparse.ArgumentParser(description="SIG read-only open order capital")
     p.add_argument("--runtime-env", type=Path, required=True)
+    p.add_argument("--reconcile-top-buys", type=int, default=0)
     args = p.parse_args()
     from dotenv import load_dotenv
 
     if not args.runtime_env.is_file():
         p.error("runtime environment file missing")
     load_dotenv(args.runtime_env, override=True)
-    result = asyncio.run(scan_orders())
+    result = asyncio.run(scan_orders(reconcile_top_buys=args.reconcile_top_buys))
     print(json.dumps(result, sort_keys=True, indent=2))
     return 0
 
