@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import Counter
 from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
@@ -49,6 +50,8 @@ _EXPIRY_REFETCH_GRACE = timedelta(milliseconds=500)
 # Routine depth GETs share a low-concurrency admission gate BEFORE the REST
 # governor; critical HIGH market recovery bypasses this routine gate.
 _MAX_ROUTINE_BOOK_FETCHES = 4
+# Limit simultaneous market-wide replay to avoid starving HIGH account/cancel reads.
+_MAX_CONCURRENT_MARKET_RESYNCS = 2
 
 
 class DepthState(StrEnum):
@@ -133,8 +136,8 @@ class ExchangeRuntimeState:
     last_accepted_revision: int | None = None
     last_reconciliation_at: datetime | None = None
     last_reconciliation_attempt_at: datetime | None = None
-    # SIG emits no event when a resting order expires; the pushed book's
-    # ``nextExpiryAt`` is the only signal. Earliest pending expiry wins.
+    # SIG emits no event when a resting order expires. Each NEW versioned
+    # full ladder replaces the previous nextExpiryAt (including with None).
     next_expiry_at: datetime | None = None
 
     @property
@@ -200,6 +203,7 @@ class SigRealtimeStateEngine:
         observation_emitter: ObservationEmitter | None = None,
         observation_process_instance_id: str | None = None,
         depth_capture: Callable[[OrderBook, str, str, datetime, int | None], None] | None = None,
+        prefer_streamed_depth: bool = False,
     ) -> None:
         if not tournament_id.strip():
             raise ValueError("tournament_id must not be blank")
@@ -232,6 +236,7 @@ class SigRealtimeStateEngine:
         self._bulk_prices_tracked_only = bulk_prices_tracked_only and bool(tracked)
         self._bulk_price_exchange_ids = tracked | frozenset(extra_bulk_price_exchange_ids)
         self._book_depth = book_depth
+        self._prefer_streamed_depth = prefer_streamed_depth
         self._open_book_max_trusted_age = timedelta(
             seconds=open_book_max_trusted_age_seconds
         )
@@ -257,6 +262,7 @@ class SigRealtimeStateEngine:
         self.last_accepted_revision: int | None = None
         self.topic_revisions: dict[str, int] = {}
         self.book_versions: dict[str, tuple[int, datetime]] = {}
+        self._stream_depth_trust_counts: Counter[str] = Counter()
         self._last_bulk_price_refresh_at: datetime | None = None
 
         self._reconcile_registry_lock = asyncio.Lock()
@@ -276,6 +282,7 @@ class SigRealtimeStateEngine:
         self._background_tasks: set[asyncio.Task[None]] = set()
         # Per-market REST recovery must not block the single Realtime FIFO.
         # Keep only one task per market; newer gaps supersede earlier ones.
+        self._market_resync_slots = asyncio.Semaphore(_MAX_CONCURRENT_MARKET_RESYNCS)
         self._market_resync_tasks: dict[str, asyncio.Task[None]] = {}
         self._market_resync_requests: dict[
             str, tuple[TrustTransition, str, int | None]
@@ -373,13 +380,14 @@ class SigRealtimeStateEngine:
             TrustTransition.UNTRUSTED_INITIAL_SUBSCRIBE,
             revision=None,
         )
-        await self._reconcile_many(
-            tracked,
-            reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=None,
-            priority=RestPriority.NORMAL,
-        )
+        if not self._prefer_streamed_depth:
+            await self._reconcile_many(
+                tracked,
+                reason=SubscriptionReason.INITIAL_SUBSCRIBE.value,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=None,
+                priority=RestPriority.NORMAL,
+            )
 
     async def refresh_universe(
         self,
@@ -439,14 +447,15 @@ class SigRealtimeStateEngine:
             reason=reason.value,
             priority=RestPriority.NORMAL,
         )
-        await self._reconcile_many(
-            self.tracked_depth_exchange_ids,
-            reason=reason.value,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=None,
-            priority=RestPriority.BACKGROUND,
-            wait=False,
-        )
+        if not self._prefer_streamed_depth:
+            await self._reconcile_many(
+                self.tracked_depth_exchange_ids,
+                reason=reason.value,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=None,
+                priority=RestPriority.BACKGROUND,
+                wait=False,
+            )
         self._observe(
             ObservationKind.RECONNECT_RESOLVED,
             monotonic_ns=time.monotonic_ns(),
@@ -537,10 +546,14 @@ class SigRealtimeStateEngine:
                 continue
 
             if state.trusted:
-                last_rest = state.last_rest_observed_at
+                last_depth = (
+                    state.orderbook.timestamp
+                    if state.orderbook is not None and state.orderbook.source == "sig-realtime"
+                    else state.last_rest_observed_at
+                )
                 if (
-                    last_rest is None
-                    or observed_at - last_rest >= self._open_book_max_trusted_age
+                    last_depth is None
+                    or observed_at - last_depth >= self._open_book_max_trusted_age
                 ):
                     newly_stale.append(state.exchange_id)
                     if not reconciliation_running:
@@ -557,17 +570,25 @@ class SigRealtimeStateEngine:
             return
 
         if expired:
-            # Targeted refetch only. Trust is kept: an expired foreign order
-            # leaves at most one vanished level for about one request, and
-            # flipping trust would make MAKE cancel/requote on every expiry.
-            await self._reconcile_many(
-                expired,
-                reason="order_expiry_refresh",
-                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-                triggering_revision=self.last_accepted_revision,
-                priority=RestPriority.NORMAL,
-                wait=wait,
-            )
+            if self._prefer_streamed_depth:
+                # An expired resting order may have removed displayed depth.
+                # Never keep trading on a possibly vanished ladder; wait for
+                # a complete stream book or a targeted candidate REST read.
+                self._mark_untrusted(
+                    expired,
+                    TrustTransition.UNTRUSTED_PERIODIC_REFRESH,
+                    revision=self.last_accepted_revision,
+                )
+            else:
+                # Legacy mode: targeted REST refresh of silent expiry.
+                await self._reconcile_many(
+                    expired,
+                    reason="order_expiry_refresh",
+                    final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                    triggering_revision=self.last_accepted_revision,
+                    priority=RestPriority.NORMAL,
+                    wait=wait,
+                )
 
         if newly_stale:
             self.health.bounded_book_refresh_count += len(newly_stale)
@@ -577,7 +598,9 @@ class SigRealtimeStateEngine:
                 revision=self.last_accepted_revision,
             )
 
-        if due_exchange_ids:
+        if due_exchange_ids and not self._prefer_streamed_depth:
+            # Stream mode does not renew all 76 untrusted books through REST.
+            # The normal candidate gate requests a scoped, governed fallback.
             await self._reconcile_many(
                 due_exchange_ids,
                 reason="expiry_safety_refresh",
@@ -657,18 +680,12 @@ class SigRealtimeStateEngine:
                 reason=reason,
             )
 
-    def _note_book_expiries(self, batch: MarketBatchDto) -> None:
-        for book in batch.books:
-            state = self.states.get(book.exchange_id)
-            if state is None or not state.tracked or book.next_expiry_at is None:
-                continue
-            if state.next_expiry_at is None or book.next_expiry_at < state.next_expiry_at:
-                state.next_expiry_at = book.next_expiry_at
-
     def _apply_realtime_books(
-        self, batch: MarketBatchDto, observed_at: datetime, revision: int
-    ) -> None:
-        """Apply newer books independently of market batch revisions."""
+        self, batch: MarketBatchDto, observed_at: datetime, revision: int,
+        *, permit_trust: bool = False,
+    ) -> set[str]:
+        """Accept versioned full ladders; trust only complete continuous updates."""
+        covered: set[str] = set()
         for book in batch.books:
             state = self.states.get(book.exchange_id)
             if state is None:
@@ -695,6 +712,88 @@ class SigRealtimeStateEngine:
             state.last_realtime_observed_at = observed_at
             state.last_accepted_revision = revision
             self.book_versions[book.exchange_id] = version
+            # This exact, newer full ladder supersedes the preceding expiry
+            # deadline. Retaining the minimum across versions incorrectly
+            # invalidates fresh books at the deadline of a removed order.
+            state.next_expiry_at = book.next_expiry_at
+            # A complete stream ladder already includes the engine changes.
+            # Never promote on a revision gap, truncated batch, future/version
+            # anomaly, contradictory level, or outstanding market recovery.
+            dirty_at = max(
+                (item.at for item in batch.book_dirty if item.exchange_id == book.exchange_id),
+                default=None,
+            )
+            latest_trade_at = max(
+                (item.executed_at for item in batch.trades if item.exchange_id == book.exchange_id),
+                default=None,
+            )
+            bounds_ok = (
+                all(level.quantity > 0 for level in book.bids + book.asks)
+                and all(
+                    book.bids[i].price > book.bids[i + 1].price
+                    for i in range(len(book.bids) - 1)
+                )
+                and all(
+                    book.asks[i].price < book.asks[i + 1].price
+                    for i in range(len(book.asks) - 1)
+                )
+                and (not book.bids or not book.asks or book.bids[0].price < book.asks[0].price)
+            )
+            complete_and_current = (
+                permit_trust and bounds_ok
+                # Market-batch delivery sourceSequence* is event provenance,
+                # NOT the version of the exchange's full book. Live SIG sends
+                # asOf.sequence both above and below sourceSequenceThrough.
+                # Never cross-compare these independent counters. Trust rests
+                # on topic revision continuity, monotonic per-exchange book
+                # version, and explicit dirty/trade coverage below.
+                and all(
+                    trade.sequence is None or trade.sequence <= book.as_of.sequence
+                    for trade in batch.trades if trade.exchange_id == book.exchange_id
+                )
+                and book.as_of.at <= observed_at + timedelta(seconds=2)
+                and (dirty_at is None or book.as_of.at >= dirty_at)
+                and (latest_trade_at is None or book.as_of.at >= latest_trade_at)
+                and self.health.connected
+                and state.market_id in self.market_states
+                and self.market_states[state.market_id].status == "open"
+                and state.market_id not in self._market_resync_tasks
+            )
+            if complete_and_current:
+                if state.tracked:
+                    state.depth_state = DepthState.TRACKED_TRUSTED
+                    covered.add(book.exchange_id)
+            elif state.tracked:
+                state.depth_state = DepthState.TRACKED_UNTRUSTED
+            if state.tracked and self._prefer_streamed_depth:
+                counters = self._stream_depth_trust_counts
+                counters["observed"] += 1
+                if complete_and_current:
+                    counters["accepted"] += 1
+                    if book.as_of.sequence > batch.delivery.source_sequence_through:
+                        counters["accepted_book_sequence_ahead"] += 1
+                    elif book.as_of.sequence < batch.delivery.source_sequence_through:
+                        counters["accepted_book_sequence_behind"] += 1
+                elif not permit_trust:
+                    counters["batch_gap_or_truncated"] += 1
+                elif not bounds_ok:
+                    counters["invalid_ladder"] += 1
+                elif not self.health.connected:
+                    counters["disconnected"] += 1
+                elif state.market_id in self._market_resync_tasks:
+                    counters["resync_in_progress"] += 1
+                elif dirty_at is not None and book.as_of.at < dirty_at:
+                    counters["dirty_after_book"] += 1
+                elif latest_trade_at is not None and book.as_of.at < latest_trade_at:
+                    counters["trade_after_book"] += 1
+                else:
+                    counters["other"] += 1
+                if counters["observed"] % 250 == 0:
+                    logger.info(
+                        "SIG streamed-depth trust %s resync_markets=%d queued_resync=%d",
+                        dict(counters), len(self._market_resync_tasks),
+                        len(self._market_resync_requests),
+                    )
             self._recorder.record_book(
                 market_id=state.market_id,
                 tournament_id=self.tournament_id,
@@ -703,6 +802,7 @@ class SigRealtimeStateEngine:
                 reason="realtime_book",
                 triggering_revision=revision,
             )
+        return covered
 
     async def handle_raw_batch(
         self,
@@ -774,7 +874,11 @@ class SigRealtimeStateEngine:
         # message was missed only when previousRevision is above it.
         last_revision = self.topic_revisions.get(topic)
         if last_revision is not None and delivery.revision <= last_revision:
-            self._apply_realtime_books(batch, observed_at, delivery.revision)
+            # A duplicate delivery is not new execution authority. Preserve
+            # legacy recorder-only book version observation, but never let
+            # duplicate topic revisions overwrite or revoke LIVE trusted depth.
+            if not self._prefer_streamed_depth:
+                self._apply_realtime_books(batch, observed_at, delivery.revision)
             return
 
         revision_gap_recovered = False
@@ -808,7 +912,10 @@ class SigRealtimeStateEngine:
         self.topic_revisions[topic] = delivery.revision
         self.last_accepted_revision = delivery.revision
         await self._ensure_known_exchanges(batch)
-        self._apply_realtime_books(batch, observed_at, delivery.revision)
+        covered_books = self._apply_realtime_books(
+            batch, observed_at, delivery.revision,
+            permit_trust=not revision_gap_recovered and not batch.resync_required,
+        )
         self._record_trades(batch, observed_at, topic=topic)
 
         if batch.resync_required:
@@ -832,7 +939,8 @@ class SigRealtimeStateEngine:
                     )
             return
 
-        self._note_book_expiries(batch)
+        # _apply_realtime_books already applies expiry from each newer full
+        # ladder. Do not recompute a minimum that can retain old deadlines.
 
         for book_event in batch.book_dirty:
             self._recorder.record_book_dirty(
@@ -889,10 +997,19 @@ class SigRealtimeStateEngine:
                 priority=RestPriority.HIGH,
             )
 
+        # A trade without a subsequent complete book can consume displayed
+        # liquidity even if SIG omitted a separate bookDirty notification.
+        # Treat it as a depth invalidation; a covering streamed ladder wins.
         dirty_exchange_ids = {
-            item.exchange_id
-            for item in batch.book_dirty
-            if self.states[item.exchange_id].market_id not in settled_market_ids
+            exchange_id
+            for exchange_id in (
+                {item.exchange_id for item in batch.book_dirty}
+                | (
+                    {item.exchange_id for item in batch.trades}
+                    if self._prefer_streamed_depth else set()
+                )
+            )
+            if self.states[exchange_id].market_id not in settled_market_ids
         }
         for exchange_id in dirty_exchange_ids:
             state = self.states[exchange_id]
@@ -902,7 +1019,7 @@ class SigRealtimeStateEngine:
         tracked_dirty_exchange_ids = {
             exchange_id
             for exchange_id in dirty_exchange_ids
-            if self.states[exchange_id].tracked
+            if self.states[exchange_id].tracked and exchange_id not in covered_books
         }
         if tracked_dirty_exchange_ids:
             self._mark_untrusted(
@@ -914,14 +1031,15 @@ class SigRealtimeStateEngine:
             # exchange. Keep books untrusted until each authoritative refetch,
             # but do not let this recurring flood occupy the execution/account
             # safety lane reserved by the shared REST governor.
-            await self._reconcile_many(
-                tracked_dirty_exchange_ids,
-                reason="book_dirty",
-                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-                triggering_revision=delivery.revision,
-                priority=RestPriority.NORMAL,
-                wait=False,
-            )
+            if not self._prefer_streamed_depth:
+                await self._reconcile_many(
+                    tracked_dirty_exchange_ids,
+                    reason="book_dirty",
+                    final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                    triggering_revision=delivery.revision,
+                    priority=RestPriority.NORMAL,
+                    wait=False,
+                )
 
         if revision_gap_recovered and market_id is None:
             await self.refresh_bulk_prices(
@@ -997,24 +1115,44 @@ class SigRealtimeStateEngine:
                     for exchange_id, item in self.states.items()
                     if item.market_id == dirty_event.market_id
                 }
+            # The tournament-wide book_dirty can arrive AFTER the full
+            # market_batch book for the *same* matching event. Arrival order
+            # must not invalidate a complete versioned ladder that already
+            # covers the dirty timestamp. A genuinely later dirty event still
+            # revokes depth until a newer complete book or REST reconciliation.
+            book_version = self.book_versions.get(dirty_event.exchange_id)
+            already_covered = (
+                self._prefer_streamed_depth
+                and state.tracked
+                and state.trusted
+                and state.orderbook is not None
+                and state.orderbook.source == "sig-realtime"
+                and book_version is not None
+                and book_version[1] >= dirty_event.at
+                and self.health.connected
+                and state.market_id not in self._market_resync_tasks
+            )
             state.last_realtime_observed_at = observed_at
             state.last_accepted_revision = revision
+            if already_covered:
+                self._stream_depth_trust_counts["duplicate_dirty_covered"] += 1
+                return {dirty_event.exchange_id}
             if state.tracked:
                 self._mark_untrusted(
                     (dirty_event.exchange_id,),
                     TrustTransition.UNTRUSTED_BOOK_DIRTY,
                     revision=revision,
                 )
-                await self._reconcile_many(
-                    (dirty_event.exchange_id,),
-                    reason="book_dirty",
-                    final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-                    triggering_revision=revision,
-                    # Unbatched dirty hints are routine book recovery, just
-                    # like batched dirty messages; preserve account/exec HIGH.
-                    priority=RestPriority.NORMAL,
-                    wait=False,
-                )
+                if not self._prefer_streamed_depth:
+                    await self._reconcile_many(
+                        (dirty_event.exchange_id,),
+                        reason="book_dirty",
+                        final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                        triggering_revision=revision,
+                        # Routine dirty hints must not occupy the order-safety lane.
+                        priority=RestPriority.NORMAL,
+                        wait=False,
+                    )
             else:
                 self._schedule_untracked_book_refetch(
                     dirty_event.exchange_id,
@@ -1272,14 +1410,15 @@ class SigRealtimeStateEngine:
         # A tournament-wide revision gap may invalidate dozens of books.
         # Block trading on each untrusted book, not the whole market-feed loop
         # on 76 HIGH-priority REST GETs.
-        await self._reconcile_many(
-            self.tracked_depth_exchange_ids,
-            reason=reason,
-            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
-            triggering_revision=triggering_revision,
-            priority=RestPriority.BACKGROUND,
-            wait=False,
-        )
+        if not self._prefer_streamed_depth:
+            await self._reconcile_many(
+                self.tracked_depth_exchange_ids,
+                reason=reason,
+                final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+                triggering_revision=triggering_revision,
+                priority=RestPriority.BACKGROUND,
+                wait=False,
+            )
 
     async def _ensure_known_exchanges(self, batch: MarketBatchDto) -> None:
         referenced = {trade.exchange_id for trade in batch.trades} | {
@@ -1334,6 +1473,12 @@ class SigRealtimeStateEngine:
             raise ValueError("market topic trade marketId mismatch")
         if any(item.market_id != market_id for item in batch.book_dirty):
             raise ValueError("market topic bookDirty marketId mismatch")
+        if any(
+            book.exchange_id not in self.states
+            or self.states[book.exchange_id].market_id != market_id
+            for book in batch.books
+        ):
+            raise ValueError("market topic full book changed market identity")
         if any(item.market_id != market_id for item in batch.market_settled):
             raise ValueError("market topic marketSettled marketId mismatch")
 
@@ -1369,12 +1514,17 @@ class SigRealtimeStateEngine:
             try:
                 while True:
                     current = self._market_resync_requests[market_id]
-                    await self._resync_market(
-                        market_id,
-                        transition=current[0],
-                        reason=current[1],
-                        triggering_revision=current[2],
-                    )
+                    # Waiting for a slot consumes NO REST governor priority
+                    # tokens. Re-read the coalesced request after waiting so
+                    # a burst of topic gaps creates only one latest recovery.
+                    async with self._market_resync_slots:
+                        current = self._market_resync_requests[market_id]
+                        await self._resync_market(
+                            market_id,
+                            transition=current[0],
+                            reason=current[1],
+                            triggering_revision=current[2],
+                        )
                     if self._market_resync_requests.get(market_id) is current:
                         return
                     # A newer gap arrived while REST was in flight. Never
@@ -1418,7 +1568,7 @@ class SigRealtimeStateEngine:
             market_id,
             reason=reason,
             triggering_revision=triggering_revision,
-            priority=RestPriority.HIGH,
+            priority=RestPriority.NORMAL,
         )
         exchange_ids = {
             exchange_id
@@ -1431,7 +1581,9 @@ class SigRealtimeStateEngine:
                 reason=reason,
                 final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
                 triggering_revision=triggering_revision,
-                priority=RestPriority.HIGH,
+                # NORMAL ensures eventual recovery amid optional background
+                # reads; account/cancel safety retains HIGH priority.
+                priority=RestPriority.NORMAL,
             )
         try:
             await self.refresh_exchange_prices(
@@ -1809,6 +1961,26 @@ class SigRealtimeStateEngine:
                     self._urgent_reconciliations.pop(exchange_id, None)
                     return
 
+    async def refresh_candidate_depth(self, exchange_id: str) -> bool:
+        """One coalesced, governed NORMAL REST fallback for a plausible taker signal.
+
+        Callers must throttle/limit concurrency. This function never marks
+        old depth fresh: normal reconciliation must complete and pass identity.
+        """
+        state = self.states.get(exchange_id)
+        if not self.health.connected or state is None or not state.tracked:
+            return False
+        market = self.market_states.get(state.market_id)
+        if market is None or market.status != "open":
+            return False
+        await self._queue_reconciliation(
+            exchange_id, reason="taker_candidate",
+            final_transition=TrustTransition.TRUSTED_AFTER_RECONCILIATION,
+            triggering_revision=state.last_accepted_revision,
+            priority=RestPriority.NORMAL, wait=True,
+        )
+        return state.trusted
+
     async def _reconcile_exchange_once(
         self,
         exchange_id: str,
@@ -1857,6 +2029,7 @@ class SigRealtimeStateEngine:
 
         try:
             self.health.full_book_refresh_count += 1
+            request_started_at = self._clock()
             async with self._rest.priority(priority):
                 snapshot = await self._rest.get_orderbook(
                     exchange_id,
@@ -1879,6 +2052,16 @@ class SigRealtimeStateEngine:
             )
             return
 
+        # Do not replace a newer complete trusted WS ladder with a REST reply
+        # that may have been cached before the in-flight realtime update.
+        if (
+            self._prefer_streamed_depth
+            and state.trusted
+            and state.orderbook is not None
+            and state.orderbook.source == "sig-realtime"
+            and state.orderbook.timestamp > request_started_at
+        ):
+            return
         state.orderbook = book
         state.last_rest_observed_at = observed_at
         state.last_reconciliation_at = observed_at

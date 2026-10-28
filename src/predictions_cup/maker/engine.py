@@ -116,6 +116,26 @@ class MakerEngine:
         self._eligibility = eligibility
         self._config = config or MakerConfig()
         self._market_token_ids = dict(market_token_ids or {})
+        # Advisory rotation may nominate existing inventory for PASSIVE
+        # reducing-only quotes; it never submits an order or changes Risk.
+        self._rotation_recycle_ids: frozenset[str] = frozenset()
+        self._rotation_recycle_expires_ns = 0
+
+    def set_rotation_recycle_targets(
+        self, exchange_ids: frozenset[str], *, observed_ns: int,
+        ttl_ns: int = 5_000_000_000,
+    ) -> None:
+        """Install a small, expiring list of markets to avoid re-accumulating.
+
+        Disappear automatically on trust/candidate loss; static config IDs
+        remain independent. The existing quote, price and RISK gates apply.
+        """
+        if observed_ns < 0 or ttl_ns <= 0 or len(exchange_ids) > 8:
+            raise ValueError("invalid bounded rotation target set")
+        if any(not eid.isdigit() for eid in exchange_ids):
+            raise ValueError("rotation targets require exact SIG exchange IDs")
+        self._rotation_recycle_ids = exchange_ids
+        self._rotation_recycle_expires_ns = observed_ns + ttl_ns
 
     @property
     def strategy_id(self) -> str:
@@ -212,7 +232,13 @@ class MakerEngine:
                 soft_cap is not None
                 and portfolio.gross_exposure + portfolio.open_order_exposure >= soft_cap
             )
-            targeted = snapshot.exchange_id in self._config.recycle_exchange_ids
+            targeted = (
+                snapshot.exchange_id in self._config.recycle_exchange_ids
+                or (
+                    snapshot.now_monotonic_ns <= self._rotation_recycle_expires_ns
+                    and snapshot.exchange_id in self._rotation_recycle_ids
+                )
+            )
             if conserve or targeted:
                 if not portfolio.account_trusted or portfolio.proxy_active:
                     gate = GateDecision(GateMode.CANCEL, "capital_recycle_account_untrusted")

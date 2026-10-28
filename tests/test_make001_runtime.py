@@ -1621,3 +1621,72 @@ def test_inventory_cache_is_immutable_and_not_part_of_portfolio_identity() -> No
     )
     with pytest.raises(TypeError):
         mutable_view[("36", "t1")] = (0, 0, 0)
+
+
+def test_runtime_prioritizes_polymarket_update_ahead_of_backlogged_recheck() -> None:
+    """A fresh PM repricing should bypass a paced ordinary recheck backlog."""
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    telemetry = HotPathTelemetry()
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+        telemetry=telemetry,
+        wall_clock=lambda: datetime(2026, 10, 26, 20, 0, tzinfo=UTC),
+        mono_clock=lambda: 100,
+        max_exchanges_per_cycle=1,
+    )
+    runtime.notify_account(observed_monotonic_ns=90)
+    asyncio.run(runtime.drain_once())  # First global safety/account turn.
+    runtime.notify_polymarket({"token-36"}, observed_monotonic_ns=91)
+    asyncio.run(runtime.drain_once())
+    asyncio.run(runtime.drain_once())
+    assert coordinator.calls == [
+        frozenset({"36"}), frozenset({"36"}), frozenset({"37"}),
+    ]
+    assert telemetry.snapshot().counters["maker_pm_priority_cycles"] == 1
+
+
+def test_runtime_pm_priority_fairness_and_repeated_updates() -> None:
+    """A nonstop PM feed cannot prevent routine/safety work from running."""
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+        wall_clock=lambda: datetime(2026, 10, 26, 20, 0, tzinfo=UTC),
+        mono_clock=lambda: 100,
+        max_exchanges_per_cycle=1,
+    )
+    runtime.notify_account(observed_monotonic_ns=90)
+    asyncio.run(runtime.drain_once())  # 36; 37 remains deferred.
+    for _ in range(4):
+        runtime.notify_polymarket({"token-36"}, observed_monotonic_ns=91)
+        asyncio.run(runtime.drain_once())
+    runtime.notify_polymarket({"token-36"}, observed_monotonic_ns=92)
+    asyncio.run(runtime.drain_once())  # Must give 37 its ordinary turn.
+    asyncio.run(runtime.drain_once())  # Pending PM 36 still processed.
+    assert coordinator.calls == (
+        [frozenset({"36"})] * 5
+        + [frozenset({"37"}), frozenset({"36"})]
+    )
+
+
+def test_runtime_pm_priority_cannot_bypass_blocked_exchange() -> None:
+    bridge = _Bridge()
+    coordinator = _Coordinator()
+    runtime = MakerRuntimeLoop(
+        bridge=cast(MakerSourceBridge, bridge),
+        coordinator=cast(MakerCoordinator, coordinator),
+        polymarket_feed_trusted=lambda: True,
+        wall_clock=lambda: datetime(2026, 10, 26, 20, 0, tzinfo=UTC),
+        mono_clock=lambda: 100,
+        max_exchanges_per_cycle=1,
+    )
+    runtime.set_blocked_exchange_ids({"36"})
+    runtime.notify_polymarket({"token-36"}, observed_monotonic_ns=91)
+    asyncio.run(runtime.drain_once())
+    assert coordinator.calls == [frozenset({"37"})]
+    assert "36" not in runtime._priority_pm_exchanges

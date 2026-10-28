@@ -56,8 +56,10 @@ from predictions_cup.maker.adapters import (
 )
 from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.coordinator import MakerCoordinator, MakerStateChange
+from predictions_cup.maker.depth_priority import CandidateDepthQueue
 from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
 from predictions_cup.maker.instance_lock import MakerInstanceLock
+from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
 from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
 from predictions_cup.maker.recovery import reconcile_maker_quote_registry
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
@@ -480,6 +482,7 @@ class MakerService:
                 observation_emitter=observation_emitter,
                 observation_process_instance_id=observation_process_instance_id,
                 depth_capture=(None if depth_mirror is None else depth_mirror.record),
+                prefer_streamed_depth=True,
             )
             await _retry_startup_sig_operation(
                 "initial_sig_market_state",
@@ -885,10 +888,117 @@ class MakerService:
                     max_sig_depth_age_ns=(
                         self.settings.residual_taker_max_sig_depth_age_ms * 1_000_000
                     ),
+                    max_sig_stream_depth_age_ns=(
+                        self.settings.residual_taker_max_sig_stream_depth_age_ms * 1_000_000
+                    ),
                     max_fair_age_ns=self.settings.residual_taker_max_fair_age_ms * 1_000_000,
                     allow_bbo_proxy=self.settings.account_proxy_enabled,
                     max_sig_bbo_age_ns=(self.settings.maker_max_bbo_age_ms * 1_000_000),
+                    rotation_allocator=LiquidityWeightedAllocator(
+                        max_trade_shares=self.settings.residual_taker_size,
+                        max_position=self.settings.residual_taker_max_position,
+                        max_age_ns=self.settings.residual_taker_max_fair_age_ms * 1_000_000,
+                        max_exit_book_age_ns=(
+                            self.settings.residual_taker_max_sig_depth_age_ms * 1_000_000
+                        ),
+                        fee_per_share=self.settings.residual_taker_fee_per_share,
+                        latency_haircut=self.settings.residual_taker_latency_haircut,
+                        adverse_haircut=self.settings.residual_taker_adverse_haircut,
+                        min_marginal_net_edge=self.settings.residual_taker_min_net_edge,
+                    ),
+                    rotation_reduce_only_targets=(
+                        (
+                            lambda ids, observed_ns: self.core.engine.set_rotation_recycle_targets(
+                                ids, observed_ns=observed_ns,
+                            )
+                        )
+                        if self.settings.rotation_passive_recycling_enabled
+                        else None
+                    ),
+                    active_rotation_exits=self.settings.rotation_active_exits_enabled,
+                    request_rotation_recheck=lambda ids: (
+                        runtime.notify_sig(ids) if runtime is not None else None
+                    ),
                 )
+                _LOG.info(
+                    "TAKE depth freshness REST_ms=%d corroborated_stream_ms=%d "
+                    "max_SIG_BBO_ms=%d required_WS_liveness_ms=5000",
+                    self.settings.residual_taker_max_sig_depth_age_ms,
+                    self.settings.residual_taker_max_sig_stream_depth_age_ms,
+                    self.settings.maker_max_bbo_age_ms,
+                )
+                # Reserve REST for genuinely residual-positive candidates, not
+                # every market update. Single flight, capped at 1 concurrent
+                # fallback and <=0.5 requests/sec; the normal governor still
+                # enforces the account budget and keeps HIGH order safety first.
+                # Only economically plausible candidate reads enter this bounded
+                # priority queue. Never compete for HIGH cancel/reconciliation.
+                candidate_depth_queue = CandidateDepthQueue(max_pending=12)
+                candidate_book_recent_ms: list[float] = []
+                candidate_worker_task: asyncio.Task[None] | None = None
+
+                async def candidate_book_worker() -> None:
+                    # Exactly ONE worker; 1.2s TTL drops candidates that waited
+                    # too long. Governor still controls account-wide 1 rps.
+                    while candidate_depth_queue.pending and sig_state.health.connected:
+                        chosen = candidate_depth_queue.pick(monotonic_ns())
+                        if chosen is None:
+                            await asyncio.sleep(0.05)
+                            continue
+                        requested_ns = monotonic_ns()
+                        try:
+                            trusted = await sig_state.refresh_candidate_depth(chosen.exchange_id)
+                            elapsed_ms = (monotonic_ns() - requested_ns) / 1_000_000
+                            candidate_book_recent_ms.append(elapsed_ms)
+                            if len(candidate_book_recent_ms) > 256:
+                                candidate_book_recent_ms.pop(0)
+                            if (
+                                len(candidate_book_recent_ms) == 1
+                                or len(candidate_book_recent_ms) % 25 == 0
+                            ):
+                                percentiles = sorted(candidate_book_recent_ms)
+                                _LOG.info(
+                                    "TAKE targeted depth ready=%s exchange=%s "
+                                    "fetch_ms=%.1f p95_ms=%.1f p99_ms=%.1f "
+                                    "score=%.4f requests=%d pending=%d "
+                                    "expired=%d low_edge_dropped=%d",
+                                    trusted, chosen.exchange_id, elapsed_ms,
+                                    percentiles[int((len(percentiles) - 1) * 0.95)],
+                                    percentiles[int((len(percentiles) - 1) * 0.99)],
+                                    chosen.score, candidate_depth_queue.requests_started,
+                                    len(candidate_depth_queue.pending),
+                                    candidate_depth_queue.dropped_expired,
+                                    candidate_depth_queue.dropped_low_edge,
+                                )
+                            # Wake ONLY the existing execution pipeline. A late
+                            # or obsolete response cannot bypass fresh economics.
+                            if trusted and runtime is not None and sig_state.health.connected:
+                                runtime.notify_sig(
+                                    (chosen.exchange_id,),
+                                    observed_monotonic_ns=monotonic_ns(),
+                                )
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            _LOG.warning(
+                                "TAKE targeted depth failed exchange=%s error=%s",
+                                chosen.exchange_id, type(exc).__name__,
+                            )
+
+                def request_candidate_book(exchange_id: str, score: float) -> None:
+                    nonlocal candidate_worker_task
+                    if not sig_state.health.connected:
+                        return
+                    state = sig_state.states.get(exchange_id)
+                    if state is None or not state.tracked:
+                        return
+                    if (candidate_depth_queue.offer(exchange_id, score, monotonic_ns())
+                            and (candidate_worker_task is None or candidate_worker_task.done())):
+                            candidate_worker_task = asyncio.create_task(
+                                candidate_book_worker(), name="take-priority-depth",
+                            )
+
+                taker._request_fresh_depth = request_candidate_book
                 _LOG.warning("RESIDUAL-TAKER-001 LIVE enabled")
                 upstream_observer = model_execution_observer
 
@@ -1071,6 +1181,7 @@ class MakerService:
                     )
 
                 adapter.set_cancel_uncertainty_resolver(reconcile_uncertain_cancels)
+                adapter.enable_background_cancel_recovery()
 
             account_controller = AccountRealtimeController(
                 state=account_state,
@@ -1659,6 +1770,7 @@ class MakerService:
                             affected.update(
                                 {item.exchange_id for item in parsed.book_dirty}
                                 | {trade.exchange_id for trade in parsed.trades}
+                                | {book.exchange_id for book in parsed.books}
                             )
                             if parsed.market_settled:
                                 settled = {

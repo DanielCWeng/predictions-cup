@@ -1,30 +1,53 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import cast
 
 import pytest
 
-from predictions_cup.maker.taker_economics import TakerEconomics, evaluate_taker_economics
+from predictions_cup.maker.taker_economics import (
+    Direction,
+    TakerEconomics,
+    evaluate_taker_economics,
+)
 from predictions_cup.runtime.models import RuntimeLevel
 
 
-def _eval(**overrides: Any) -> TakerEconomics:
-    kwargs: dict[str, Any] = dict(
-        direction="BUY",
-        levels=(RuntimeLevel(100, 10), RuntimeLevel(101, 20), RuntimeLevel(104, 50)),
-        conservative_fair=0.53,
-        desired_quantity=50,
-        trusted_depth=True,
-        book_age_ns=10,
-        reference_age_ns=10,
-        fee_per_share=0.001,
-        latency_haircut=0.005,
-        adverse_selection_haircut=0.005,
-        min_net_edge_per_share=0.005,
-        maker_price_ticks=99,
+def _eval(**overrides: object) -> TakerEconomics:
+    """Pass typed arguments; heterogeneous pytest overrides are test data."""
+    return evaluate_taker_economics(
+        direction=cast(Direction, overrides.get("direction", "BUY")),
+        levels=cast(
+            tuple[RuntimeLevel, ...],
+            overrides.get(
+                "levels",
+                (RuntimeLevel(100, 10), RuntimeLevel(101, 20), RuntimeLevel(104, 50)),
+            ),
+        ),
+        conservative_fair=cast(float, overrides.get("conservative_fair", 0.53)),
+        desired_quantity=cast(int, overrides.get("desired_quantity", 50)),
+        trusted_depth=cast(bool, overrides.get("trusted_depth", True)),
+        book_age_ns=cast(int, overrides.get("book_age_ns", 10)),
+        reference_age_ns=cast(int, overrides.get("reference_age_ns", 10)),
+        fee_per_share=cast(float, overrides.get("fee_per_share", 0.001)),
+        latency_haircut=cast(float, overrides.get("latency_haircut", 0.005)),
+        adverse_selection_haircut=cast(
+            float, overrides.get("adverse_selection_haircut", 0.005)
+        ),
+        min_net_edge_per_share=cast(
+            float, overrides.get("min_net_edge_per_share", 0.005)
+        ),
+        maker_price_ticks=cast(int | None, overrides.get("maker_price_ticks", 99)),
+        available_cash=cast(float | None, overrides.get("available_cash")),
+        reducible_inventory_shares=cast(
+            int, overrides.get("reducible_inventory_shares", 0)
+        ),
+        max_book_age_ns=cast(
+            int, overrides.get("max_book_age_ns", 1_500_000_000)
+        ),
+        max_reference_age_ns=cast(
+            int, overrides.get("max_reference_age_ns", 5_000_000_000)
+        ),
     )
-    kwargs.update(overrides)
-    return evaluate_taker_economics(**kwargs)
 
 
 def test_buy_walks_full_depth_and_stops_before_unprofitable_level() -> None:
@@ -70,7 +93,7 @@ def test_sell_walks_bid_depth_and_uses_upper_fair_bound() -> None:
         (dict(available_cash=float("nan")), "cash_untrusted"),
     ],
 )
-def test_fail_closed(changes: dict[str, Any], why: str) -> None:
+def test_fail_closed(changes: dict[str, object], why: str) -> None:
     assert _eval(**changes).reason == why
 
 

@@ -25,6 +25,7 @@ from predictions_cup.maker.contracts import (
 )
 from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.lifecycle import QuoteRegistry
+from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
 from predictions_cup.maker.residual_taker import STRATEGY_ID, resolve_residual_universe
 from predictions_cup.maker.safety import MakerKillSwitch
@@ -576,9 +577,9 @@ def test_taker_liveness_recheck_logs_completed_evaluation(
 
     assert harness.coordinator.evaluation_cycles == 2
     assert (
-        "TAKE heartbeat evaluated=1 candidate_ready=1 no_residual=0 signals=1 "
-        "attempts=1 cycles=1 skipped={}"
-    ) in caplog.text
+        "TAKE heartbeat evaluated=1 candidate_ready=1 no_residual=0 "
+        "signals=1 attempts=1 cycles=1 skipped={}" in caplog.text
+    )
 
 
 def test_taker_liveness_recovers_from_one_slow_evaluation(
@@ -651,3 +652,158 @@ def test_economics_gate_denies_residual_without_after_cost_edge() -> None:
     harness = _Harness(economics_gate_enabled=True)
     harness.run(_snapshot(pm_bid=0.712, pm_ask=0.732))
     assert not harness.plans
+
+
+@pytest.mark.parametrize("strictly_reducing", [True, False])
+def test_rotation_exit_reuses_build009_and_requires_risk_proof(
+    monkeypatch: pytest.MonkeyPatch, strictly_reducing: bool,
+) -> None:
+    """A nominated exit is an actual journalled order only with RISK proof."""
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.execution.journal import ExecutionJournal
+    from predictions_cup.execution.models import OperationKind
+    from predictions_cup.maker.capital_rotation import RotationAssessment
+    from predictions_cup.maker.liquidity_allocator import RankedRotation
+    from predictions_cup.risk.capital import CapitalRiskState
+    from predictions_cup.risk.core import RiskDecision
+    from predictions_cup.strategy.core import Opportunity, StrategyFamily
+
+    class ClaimJournal(_Journal):
+        def __init__(self) -> None:
+            super().__init__()
+            self.claims: set[str] = set()
+
+        def claim_rotation_operation(self, operation_id: str, tournament_id: str) -> bool:
+            if operation_id in self.claims or tournament_id != TOURNAMENT:
+                return False
+            self.claims.add(operation_id)
+            return True
+
+    class OnlyCandidate:
+        def __init__(self, candidate: RankedRotation) -> None:
+            self.candidate = candidate
+
+        def rank(self, *, now_ns: int, limit: int) -> tuple[RankedRotation, ...]:
+            return (self.candidate,) if now_ns == NOW and limit > 0 else ()
+
+    h = _Harness()
+    journal = ClaimJournal()
+    h.journal = journal
+    h.coordinator._journal = cast(ExecutionJournal, journal)
+    capital = SimpleNamespace(
+        account_trusted=True, reconciliation_complete=True,
+        exposure=SimpleNamespace(trusted=True, uncertain_order_exposure=0),
+    )
+    h.coordinator._risk_context_source = replace(
+        _risk(), capital_state=cast(CapitalRiskState, capital)
+    )
+    candidate = RankedRotation(
+        10.0, 0.2, 20.0,
+        RotationAssessment(
+            "CANDIDATE_ONLY", "positive_after_costs", EXCHANGE, "replacement",
+            shares=50, hold_fair_value=37.75, gain_after_buffer=10.0,
+        ),
+        "BUY",
+    )
+    h.coordinator._rotation_allocator = cast(
+        "LiquidityWeightedAllocator", OnlyCandidate(candidate)
+    )
+    original = _snapshot()
+    portfolio = RuntimePortfolio(
+        positions=(RuntimePosition(EXCHANGE, MARKET, TOURNAMENT, 50, 50),),
+        orders=(), account_trusted=True,
+        account_trust_grade=AccountTrustGrade.TRUSTED,
+    )
+    snapshot = replace(
+        original,
+        runtime=replace(original.runtime, portfolio=portfolio),
+    )
+
+    def admission(opportunity: Opportunity, *_args: object) -> RiskDecision:
+        assert opportunity.strategy_id == "rotation-exit-v1"
+        (leg,) = opportunity.legs
+        assert leg.action is OrderAction.SELL
+        assert leg.quantity == 50
+        assert leg.limit_price_ticks == 139
+        intent = RuntimeOrderIntent(
+            intent_id="rotation-test-intent",
+            exchange_id=leg.exchange_id,
+            market_id=leg.market_id,
+            tournament_id=leg.tournament_id,
+            outcome_side=leg.outcome_side,
+            action=leg.action,
+            quantity=leg.quantity,
+            limit_price_ticks=leg.limit_price_ticks,
+            strategy_id=opportunity.strategy_id,
+            decision_observation_ns=opportunity.decision_observation_ns,
+        )
+        return RiskDecision(
+            approved=True,
+            reason="approved",
+            execution_mode=ExecutionMode.LIVE,
+            operation_kind=OperationKind.SINGLE_PLACEMENT,
+            intents=(intent,),
+            strategy_family=StrategyFamily.FV_TAKE.value,
+            strategy_id=opportunity.strategy_id,
+            signal_value=opportunity.gross_edge,
+            fair_value=opportunity.fair_value,
+            decision_observation_ns=opportunity.decision_observation_ns,
+            inventory_reduction_verified=strictly_reducing,
+        )
+
+    monkeypatch.setattr(residual_live_module, "evaluate_risk", admission)
+    change = MakerStateChange("rotation-test", NOW, frozenset({EXCHANGE}))
+    results = asyncio.run(h.coordinator._execute_rotation_exit(change, snapshot, candidate))
+    if strictly_reducing:
+        assert len(results) == 2
+        assert len(h.plans) == 1
+        assert len(h.cancels) == 1
+        assert journal.claims == {f"rotation-exit:{change.event_id}:{EXCHANGE}"}
+    else:
+        assert results == ()
+        assert not h.plans and not h.cancels and not journal.claims
+
+
+def test_rotation_exit_rejects_stale_depth_before_any_order() -> None:
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.maker.capital_rotation import RotationAssessment
+    from predictions_cup.maker.liquidity_allocator import RankedRotation
+    from predictions_cup.risk.capital import CapitalRiskState
+
+    h = _Harness()
+    capital = SimpleNamespace(
+        account_trusted=True, reconciliation_complete=True,
+        exposure=SimpleNamespace(trusted=True, uncertain_order_exposure=0),
+    )
+    h.coordinator._risk_context_source = replace(
+        _risk(), capital_state=cast(CapitalRiskState, capital)
+    )
+    candidate = RankedRotation(
+        10, .2, 20,
+        RotationAssessment(
+            "CANDIDATE_ONLY", "positive_after_costs", EXCHANGE, "replacement",
+            shares=50, gain_after_buffer=10,
+        ), "BUY",
+    )
+    class OnlyCandidate:
+        def rank(self, *, now_ns: int, limit: int) -> tuple[RankedRotation, ...]:
+            return (candidate,)
+    h.coordinator._rotation_allocator = cast("LiquidityWeightedAllocator", OnlyCandidate())
+    snap = _snapshot()
+    positions = RuntimePortfolio(
+        positions=(RuntimePosition(EXCHANGE, MARKET, TOURNAMENT, 50, 50),),
+        orders=(), account_trusted=True,
+        account_trust_grade=AccountTrustGrade.TRUSTED,
+    )
+    snap = replace(
+        snap,
+        runtime=replace(snap.runtime, portfolio=positions),
+        sig_depth_observed_ns=NOW - 2_000_000_000,
+    )
+    change = MakerStateChange("rotation-stale", NOW, frozenset({EXCHANGE}))
+    assert asyncio.run(h.coordinator._execute_rotation_exit(change, snap, candidate)) == ()
+    assert not h.plans
