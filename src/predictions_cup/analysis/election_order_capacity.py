@@ -127,7 +127,7 @@ async def scan_orders(*, limit: int = 2000, reconcile_top_buys: int = 0) -> dict
                     and order.price_limit is not None
                     and order.quantity_filled is None
                 ),
-                key=lambda item: item[1].quantity * item[1].price_limit,
+                key=lambda item: item[1].quantity * (item[1].price_limit or ZERO),
                 reverse=True,
             )[:reconcile_top_buys]
             for idx, order in ranked:
