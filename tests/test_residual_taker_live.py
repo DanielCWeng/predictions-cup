@@ -157,6 +157,8 @@ class _Harness:
         cancel_failures: int = 0,
         allow_bbo_proxy: bool = False,
         economics_gate_enabled: bool = False,
+        dispatch_state: LifecycleState | None = None,
+        journal_fill_on_open: bool = False,
     ) -> None:
         self.journal = _Journal()
         self.quotes = QuoteRegistry()
@@ -165,6 +167,8 @@ class _Harness:
         self.plans: list[ExecutionPlan] = []
         self.cancels: list[ExecutionEnvelope] = []
         self._resting = resting
+        self._dispatch_state = dispatch_state
+        self._journal_fill_on_open = journal_fill_on_open
         self._cancel_failures = cancel_failures
         self.coordinator = ResidualTakerLiveCoordinator(
             mapping=MAPPING,
@@ -185,10 +189,13 @@ class _Harness:
 
     async def _dispatch(self, plan: ExecutionPlan) -> ExecutionEvent:
         self.plans.append(plan)
-        state = LifecycleState.OPEN if self._resting else LifecycleState.FILLED
-        self.journal.by_operation[plan.envelope.logical_operation_id] = [
-            _JournalEvent("ACK", "4242", state.value)
-        ]
+        state = self._dispatch_state or (
+            LifecycleState.OPEN if self._resting else LifecycleState.FILLED
+        )
+        events = [_JournalEvent("ACK", "4242", state.value)]
+        if self._journal_fill_on_open:
+            events.append(_JournalEvent("REALTIME_FILL", "4242", None))
+        self.journal.by_operation[plan.envelope.logical_operation_id] = events
         return ExecutionEvent(
             logical_operation_id=plan.envelope.logical_operation_id,
             state=state,
@@ -1124,3 +1131,39 @@ def test_no_fresh_issuer_account_after_fill_prevents_same_market_repeat() -> Non
     harness.run(snapshot, sequence=2)
     assert len(harness.plans) == 1
     assert harness.coordinator._skipped_signals["post_fill_reconciliation_required"] == 1
+
+@pytest.mark.parametrize("state", [LifecycleState.PARTIALLY_FILLED, LifecycleState.FILLED])
+def test_taker_any_fill_requires_new_account_before_repeat(state: LifecycleState) -> None:
+    """A partial fill followed by cancel is still capital committed to inventory."""
+    harness = _Harness(economics_gate_enabled=True, dispatch_state=state)
+    harness.coordinator._signal.cooldown_ns = 0
+    snapshot = _snapshot(ask_qty=30)
+    harness.run(snapshot)
+    assert len(harness.plans) == 1
+    assert harness.coordinator._last_filled_account_ns.get(EXCHANGE) == NOW
+
+    harness.run(snapshot, sequence=2)
+    assert len(harness.plans) == 1
+    assert harness.coordinator._skipped_signals["post_fill_reconciliation_required"] == 1
+
+
+def test_taker_journal_fill_after_open_ack_also_requires_reconciliation() -> None:
+    """A fill racing an OPEN acknowledgement must not escape the account barrier."""
+    harness = _Harness(economics_gate_enabled=True, journal_fill_on_open=True)
+    harness.coordinator._signal.cooldown_ns = 0
+    snapshot = _snapshot(ask_qty=30)
+    harness.run(snapshot)
+    assert len(harness.plans) == 1
+    assert harness.coordinator._last_filled_account_ns.get(EXCHANGE) == NOW
+
+    harness.run(snapshot, sequence=2)
+    assert len(harness.plans) == 1
+    assert harness.coordinator._skipped_signals["post_fill_reconciliation_required"] == 1
+
+
+def test_unfilled_open_taker_does_not_add_unnecessary_fill_barrier() -> None:
+    """Ordinary resting/cancel flows do not claim that a trade filled."""
+    harness = _Harness(economics_gate_enabled=True)
+    harness.run(_snapshot())
+    assert len(harness.plans) == 1
+    assert EXCHANGE not in harness.coordinator._last_filled_account_ns
