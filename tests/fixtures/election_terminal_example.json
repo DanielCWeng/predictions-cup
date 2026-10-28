@@ -1,0 +1,78 @@
+{
+  "cash": 100,
+  "target_balance": 139,
+  "scenarios": [
+    {
+      "name": "synthetic-swing",
+      "resolves_yes": {
+        "example-race-a": true,
+        "example-race-b": true
+      }
+    },
+    {
+      "name": "synthetic-no-swing",
+      "resolves_yes": {
+        "example-race-a": false,
+        "example-race-b": false
+      }
+    }
+  ],
+  "probability_views": [
+    {
+      "name": "synthetic-model-a",
+      "evidence_reference": "fixture://model-a",
+      "probabilities": {
+        "synthetic-swing": 0.3,
+        "synthetic-no-swing": 0.7
+      }
+    },
+    {
+      "name": "synthetic-model-b",
+      "evidence_reference": "fixture://model-b",
+      "probabilities": {
+        "synthetic-swing": 0.4,
+        "synthetic-no-swing": 0.6
+      }
+    }
+  ],
+  "holdings": [],
+  "plans": [
+    {
+      "name": "single-a",
+      "trades": [
+        {
+          "market_id": "example-race-a",
+          "action": "BUY",
+          "side": "YES",
+          "quantity": 50,
+          "executable_price": 0.2,
+          "displayed_shares": 50,
+          "extra_cost_per_share": 0
+        }
+      ]
+    },
+    {
+      "name": "joint-swing",
+      "trades": [
+        {
+          "market_id": "example-race-a",
+          "action": "BUY",
+          "side": "YES",
+          "quantity": 50,
+          "executable_price": 0.2,
+          "displayed_shares": 50,
+          "extra_cost_per_share": 0
+        },
+        {
+          "market_id": "example-race-b",
+          "action": "BUY",
+          "side": "YES",
+          "quantity": 50,
+          "executable_price": 0.25,
+          "displayed_shares": 50,
+          "extra_cost_per_share": 0
+        }
+      ]
+    }
+  ]
+}
