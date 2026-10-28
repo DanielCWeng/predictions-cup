@@ -856,7 +856,7 @@ def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
         orders=(), account_trusted=True,
         account_trust_grade=AccountTrustGrade.TRUSTED,
     )
-    snapshot = _snapshot()
+    snapshot = _snapshot(ask_qty=100)
     snapshot = replace(
         snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio),
         account_observed_ns=NOW,
