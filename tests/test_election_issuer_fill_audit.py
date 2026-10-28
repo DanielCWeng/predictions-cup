@@ -40,10 +40,10 @@ def fill_envelope(
 
 
 def test_complete_issuer_report_confirms_remaining_quantity() -> None:
-    assert issuer_filled_total(sample_order(), fill_envelope()) == Decimal("25")
-    assert sample_order().quantity - issuer_filled_total(
-        sample_order(), fill_envelope()
-    ) == Decimal("275")
+    confirmed = issuer_filled_total(sample_order(), fill_envelope())
+    assert confirmed == Decimal("25")
+    assert confirmed is not None
+    assert sample_order().quantity - confirmed == Decimal("275")
 
 
 def test_partial_or_paginated_issuer_report_abstains() -> None:
