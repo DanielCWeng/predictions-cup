@@ -75,6 +75,8 @@ class LiveMakerExecutionAdapter:
         self._journal = journal
         self._quotes = quotes
         self._cancel_uncertainty_resolver: Callable[[str], Awaitable[object]] | None = None
+        self._background_cancel_recovery = False
+        self._cancel_recovery_tasks: dict[str, asyncio.Task[None]] = {}
         self._observation_emitter = observation_emitter
         self._observation_process_instance_id = (
             uuid4().hex
@@ -91,6 +93,46 @@ class LiveMakerExecutionAdapter:
     ) -> None:
         """Install the existing account reconciliation path as rare cancel recovery."""
         self._cancel_uncertainty_resolver = resolver
+
+    def enable_background_cancel_recovery(self) -> None:
+        """Keep venue uncertainty fail-closed without blocking maker cycles."""
+        self._background_cancel_recovery = True
+
+    async def _recover_cancel_background(self, logical_operation_id: str) -> None:
+        resolver = self._cancel_uncertainty_resolver
+        if resolver is None:
+            return
+        try:
+            async with asyncio.timeout(_CANCEL_RECOVERY_TIMEOUT_SECONDS):
+                await resolver(logical_operation_id)
+        except TimeoutError:
+            _LOG.warning(
+                "MAKE background targeted cancel recovery timed out operation_id=%s",
+                logical_operation_id,
+            )
+        except Exception:
+            # Uncertainty remains journalled for regular account recovery.
+            _LOG.exception(
+                "MAKE background targeted cancel recovery failed operation_id=%s",
+                logical_operation_id,
+            )
+
+    def _schedule_cancel_recovery(self, logical_operation_id: str) -> None:
+        if logical_operation_id in self._cancel_recovery_tasks:
+            return
+        if len(self._cancel_recovery_tasks) >= 1:
+            _LOG.warning("MAKE background cancel recovery busy; account resync owns uncertainty")
+            return
+        task = asyncio.create_task(
+            self._recover_cancel_background(logical_operation_id),
+            name="make-cancel-recovery",
+        )
+        self._cancel_recovery_tasks[logical_operation_id] = task
+
+        def finished(done: asyncio.Task[None]) -> None:
+            self._cancel_recovery_tasks.pop(logical_operation_id, None)
+
+        task.add_done_callback(finished)
 
     async def place(
         self,
@@ -136,6 +178,9 @@ class LiveMakerExecutionAdapter:
                 except SigExecutionUncertainError:
                     pass
             if self._cancel_uncertainty_resolver is not None:
+                if self._background_cancel_recovery:
+                    self._schedule_cancel_recovery(logical_operation_id)
+                    raise exc
                 try:
                     async with asyncio.timeout(_CANCEL_RECOVERY_TIMEOUT_SECONDS):
                         await self._cancel_uncertainty_resolver(logical_operation_id)

@@ -188,6 +188,17 @@ class ExecutionJournal:
         self._ensure_execution_envelope_columns()
         self._ensure_execution_event_columns()
         self._ensure_fill_dedupe_table()
+        # Reserve rotation identities independently of order envelopes. A
+        # reservation is durable even if the process crashes before its exit.
+        self._connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS rotation_claims (
+                operation_id TEXT PRIMARY KEY,
+                tournament_id TEXT NOT NULL,
+                created_at_utc TEXT NOT NULL
+            )
+            """
+        )
         self._backfill_tournament_ids()
         self._connection.execute(
             """
@@ -355,6 +366,23 @@ class ExecutionJournal:
     def add_operation_listener(self, listener: Callable[[str], None]) -> None:
         """Subscribe to committed journal updates without affecting dispatch."""
         self._operation_listeners.append(listener)
+
+    def claim_rotation_operation(self, operation_id: str, tournament_id: str) -> bool:
+        """Durably reserve one rotation identity before either LIVE order.
+
+        A rejected/unfinished rotation keeps its claim across process restarts.
+        Both legs use distinct :exit / :entry order identities; the claim is
+        never reissued or recycled after an ambiguous network response.
+        """
+        if not operation_id.strip() or not tournament_id.strip():
+            raise ValueError("rotation and tournament identities required")
+        with self._connection:
+            result = self._connection.execute(
+                "INSERT OR IGNORE INTO rotation_claims "
+                "(operation_id, tournament_id, created_at_utc) VALUES (?, ?, ?)",
+                (operation_id, tournament_id, datetime.now(UTC).isoformat()),
+            )
+        return result.rowcount == 1
 
     def latest_event_id(self) -> int:
         row = self._connection.execute(

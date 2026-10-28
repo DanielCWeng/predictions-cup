@@ -81,6 +81,10 @@ class MakerMarketSnapshot:
     external_quotes: Mapping[str, ExternalQuoteState]
     volatility: float | None = None
     external_feed_observed_ns: int | None = None
+    # True only for streamed, versioned, unchanged full ladders corroborated
+    # by a newer matching REST scalar BBO and a healthy continuous WS feed.
+    # Execution may apply a bounded stream-only freshness window.
+    sig_stream_depth_corroborated: bool = False
 
     def __post_init__(self) -> None:
         if not self.exchange_id.strip() or not self.market_id.strip():

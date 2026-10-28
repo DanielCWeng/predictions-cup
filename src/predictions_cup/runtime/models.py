@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
+from types import MappingProxyType
 
 SIG_TICK = Decimal("0.005")
 MIN_LIMIT_TICKS = 1
@@ -96,6 +98,41 @@ class RuntimePortfolio:
     account_proxy_age_ns: int | None = None
     account_proxy_uncertainty: float = 0.0
     account_proxy_cash_balance: Decimal | None = None
+    # Immutable, per-snapshot inventory index. Built on first demand: the
+    # account/risk path that merely constructs a portfolio pays no extra cost.
+    # Excluded from equality/hash so caching does not alter portfolio identity.
+    _inventory_lookup: Mapping[tuple[str, str], tuple[float, float, float]] | None = field(
+        default=None, init=False, repr=False, compare=False, hash=False
+    )
+
+    def _indexed_inventory(self) -> Mapping[tuple[str, str], tuple[float, float, float]]:
+        lookup = self._inventory_lookup
+        if lookup is not None:
+            return lookup
+        # position, positive pending, negative pending, unknown pending.
+        totals: dict[tuple[str, str], list[float]] = {}
+        for position in self.positions:
+            key = (position.exchange_id, position.tournament_id)
+            totals.setdefault(key, [0.0, 0.0, 0.0, 0.0])[0] += position.signed_quantity
+        for order in self.orders:
+            if not (order.open or order.uncertain):
+                continue
+            key = (order.exchange_id, order.tournament_id)
+            values = totals.setdefault(key, [0.0, 0.0, 0.0, 0.0])
+            if order.signed_quantity > 0.0:
+                values[1] += order.signed_quantity
+            elif order.signed_quantity < 0.0:
+                values[2] += order.signed_quantity
+            else:
+                values[3] += order.reserved_exposure
+        lookup = MappingProxyType({
+            key: (row[0], row[0] + row[2] - row[3], row[0] + row[1] + row[3])
+            for key, row in totals.items()
+        })
+        # A frozen portfolio only gains a deterministic cache derived from its
+        # immutable positions and orders. Never cache across account snapshots.
+        object.__setattr__(self, "_inventory_lookup", lookup)
+        return lookup
 
     @property
     def trust_grade(self) -> AccountTrustGrade:
@@ -118,41 +155,21 @@ class RuntimePortfolio:
         )
 
     def signed_inventory(self, exchange_id: str, tournament_id: str) -> float:
-        return sum(
-            position.signed_quantity
-            for position in self.positions
-            if position.exchange_id == exchange_id and position.tournament_id == tournament_id
-        )
+        value = self._indexed_inventory().get((exchange_id, tournament_id))
+        return 0.0 if value is None else value[0]
 
     def worst_case_inventory_bounds(
         self,
         exchange_id: str,
         tournament_id: str,
     ) -> tuple[float, float]:
-        """Return signed inventory bounds if all risk-bearing orders fill.
+        """Signed inventory bounds if every open/uncertain order fills.
 
-        Orders with a known signed direction extend only that side of the range;
-        orders without direction are counted against both sides. The maker uses
-        these bounds for projected-position admission with both trusted and
-        proxy account state.
+        Unknown order directions count against both sides. Every result
+        uses the same arithmetic as the original portfolio scan.
         """
-        position = self.signed_inventory(exchange_id, tournament_id)
-        positive = 0.0
-        negative = 0.0
-        unknown = 0.0
-        for order in self.orders:
-            if not (order.open or order.uncertain):
-                continue
-            if order.exchange_id != exchange_id or order.tournament_id != tournament_id:
-                continue
-            signed = order.signed_quantity
-            if signed > 0.0:
-                positive += signed
-            elif signed < 0.0:
-                negative += signed
-            else:
-                unknown += order.reserved_exposure
-        return position + negative - unknown, position + positive + unknown
+        value = self._indexed_inventory().get((exchange_id, tournament_id))
+        return (0.0, 0.0) if value is None else (value[1], value[2])
 
     def is_inventory_reducing(
         self,

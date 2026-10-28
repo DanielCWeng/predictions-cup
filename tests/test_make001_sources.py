@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from predictions_cup.external.polymarket.models import BookLevel, BookSnapshot
+from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.service import _mapped_token_ids
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import (
@@ -822,3 +823,69 @@ def test_trusted_sources_preserve_actual_old_observation_age() -> None:
 def test_polymarket_service_seeds_all_outcome_tokens_not_only_aligned_fv_token() -> None:
     tokens = _mapped_token_ids(_mapping())
     assert tokens == ("no-token", "yes-token")
+
+
+def test_corrob_stream_depth_requires_fresh_feed_matching_scalar_and_unexpired_book() -> None:
+    wall_now = datetime(2026, 10, 26, 18, 0, tzinfo=UTC)
+    book_at = wall_now - timedelta(seconds=4)
+    scalar_at = wall_now - timedelta(milliseconds=500)
+    book = OrderBook(
+        exchange_id="36",
+        bids=(OrderBookLevel(price=Decimal("0.49"), quantity=Decimal("7")),),
+        asks=(OrderBookLevel(price=Decimal("0.51"), quantity=Decimal("8")),),
+        timestamp=book_at, source="sig-realtime")
+    state = ExchangeRuntimeState(
+        exchange_id="36", market_id="m1", tournament_id="t1",
+        depth_state=DepthState.TRACKED_TRUSTED, orderbook=book,
+        last_realtime_observed_at=book_at,
+        scalar_best_bid=Decimal("0.49"), scalar_best_ask=Decimal("0.51"),
+        last_scalar_observed_at=scalar_at,
+        next_expiry_at=wall_now + timedelta(seconds=2))
+    sig = _SigState(
+        tournament_id="t1", states={"36": state},
+        market_states={"m1": MarketRuntimeState(
+            market_id="m1", title="fixture", status="open",
+            settled_with=None, last_rest_observed_at=book_at)},
+        health=RuntimeHealth(
+            connected=True, last_valid_batch=wall_now - timedelta(milliseconds=100)))
+    bridge = MakerSourceBridge(
+        mapping=_mapping(), sig_state=sig,
+        account_state=_AccountState(
+            tournament_id="t1", last_accepted_observed_at=scalar_at,
+            portfolio=RuntimePortfolio(account_trusted=True)),
+        polymarket_books=_PmBooks({"yes-token": _pm_snapshot(scalar_at)}))
+    def snapshot(at: datetime = wall_now) -> MakerMarketSnapshot:
+        return bridge.build("36", wall_now=at, monotonic_now_ns=20_000_000_000,
+                            polymarket_feed_trusted=True)
+    good = snapshot()
+    assert good.sig_depth_trusted and good.sig_stream_depth_corroborated
+    assert good.sig_depth_observed_ns == 16_000_000_000
+
+    # The streamed full ladder is authoritative on its own. An OLDER scalar
+    # poll must not gate an unchanged, gap-checked and unexpired book.
+    state.last_scalar_observed_at = book_at - timedelta(seconds=1)
+    prior_scalar = snapshot()
+    assert prior_scalar.sig_depth_trusted and prior_scalar.sig_stream_depth_corroborated
+    assert prior_scalar.sig_bbo_observed_ns == prior_scalar.sig_depth_observed_ns
+    state.last_scalar_observed_at = None
+    assert snapshot().sig_stream_depth_corroborated
+    state.last_scalar_observed_at = scalar_at
+
+    # Even if some caller erroneously kept the state flag, an uncovered
+    # realtime touch must independently prevent extending the book's age.
+    state.last_realtime_observed_at = book_at + timedelta(milliseconds=200)
+    assert not snapshot().sig_stream_depth_corroborated
+    state.last_realtime_observed_at = book_at
+
+    state.scalar_best_ask = Decimal("0.52")
+    assert not snapshot().sig_stream_depth_corroborated
+    state.scalar_best_ask = Decimal("0.51")
+    sig.health.last_valid_batch = wall_now - timedelta(seconds=6)
+    assert not snapshot().sig_stream_depth_corroborated
+    sig.health.last_valid_batch = wall_now
+    assert not snapshot(wall_now + timedelta(seconds=3)).sig_depth_trusted
+    state.next_expiry_at = None
+    state.orderbook = OrderBook(
+        exchange_id="36", bids=book.bids, asks=book.asks,
+        timestamp=book_at, source="sig-rest")
+    assert not snapshot().sig_stream_depth_corroborated

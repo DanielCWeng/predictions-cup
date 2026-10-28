@@ -46,6 +46,8 @@ class MakerConfig:
     deep_ladder_level_offsets: tuple[float, ...] = (0.01, 0.02, 0.04)
     deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
     deep_ladder_position_cap: int = 200
+    soft_max_gross_exposure: float | None = None
+    recycle_exchange_ids: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if not self.strategy_id.strip() or not self.strategy_version.strip():
@@ -80,6 +82,13 @@ class MakerConfig:
             raise ValueError("deep ladder offsets/sizes must be positive matching tuples")
         if self.deep_ladder_position_cap < 1:
             raise ValueError("deep ladder cap must be positive")
+        if self.soft_max_gross_exposure is not None and (
+            not math.isfinite(self.soft_max_gross_exposure)
+            or self.soft_max_gross_exposure <= 0
+        ):
+            raise ValueError("soft max gross must be positive and finite")
+        if any(not exchange_id.isdigit() for exchange_id in self.recycle_exchange_ids):
+            raise ValueError("recycling exchange IDs must be exact numeric IDs")
 
 
 class MakerEngine:
@@ -107,6 +116,26 @@ class MakerEngine:
         self._eligibility = eligibility
         self._config = config or MakerConfig()
         self._market_token_ids = dict(market_token_ids or {})
+        # Advisory rotation may nominate existing inventory for PASSIVE
+        # reducing-only quotes; it never submits an order or changes Risk.
+        self._rotation_recycle_ids: frozenset[str] = frozenset()
+        self._rotation_recycle_expires_ns = 0
+
+    def set_rotation_recycle_targets(
+        self, exchange_ids: frozenset[str], *, observed_ns: int,
+        ttl_ns: int = 5_000_000_000,
+    ) -> None:
+        """Install a small, expiring list of markets to avoid re-accumulating.
+
+        Disappear automatically on trust/candidate loss; static config IDs
+        remain independent. The existing quote, price and RISK gates apply.
+        """
+        if observed_ns < 0 or ttl_ns <= 0 or len(exchange_ids) > 8:
+            raise ValueError("invalid bounded rotation target set")
+        if any(not eid.isdigit() for eid in exchange_ids):
+            raise ValueError("rotation targets require exact SIG exchange IDs")
+        self._rotation_recycle_ids = exchange_ids
+        self._rotation_recycle_expires_ns = observed_ns + ttl_ns
 
     @property
     def strategy_id(self) -> str:
@@ -157,13 +186,8 @@ class MakerEngine:
                 predictive_shift=prediction.probability_shift,
             )
 
-        signed_inventory = sum(
-            position.signed_quantity
-            for position in snapshot.runtime.portfolio.positions
-            if (
-                position.exchange_id == snapshot.exchange_id
-                and position.tournament_id == snapshot.tournament_id
-            )
+        signed_inventory = snapshot.runtime.portfolio.signed_inventory(
+            snapshot.exchange_id, snapshot.tournament_id
         )
         max_abs_inventory = self._config.max_abs_inventory
         if self._config.deep_ladder_enabled:
@@ -194,6 +218,40 @@ class MakerEngine:
                 confidence=fair_value.confidence,
                 predictive_shift=prediction.probability_shift,
             )
+
+        # At the soft capital target, stop adding gross exposure and prefer
+        # inventory-reducing quotes. Exact recycling IDs remain reduce-only
+        # regardless of global headroom, so released capacity is not reabsorbed
+        # by the same unwanted positions. Existing risk and journal are intact.
+        if gate.mode not in {
+            GateMode.HOLD, GateMode.CANCEL, GateMode.SUSPEND, GateMode.NO_TRADE
+        }:
+            portfolio = snapshot.runtime.portfolio
+            soft_cap = self._config.soft_max_gross_exposure
+            conserve = (
+                soft_cap is not None
+                and portfolio.gross_exposure + portfolio.open_order_exposure >= soft_cap
+            )
+            targeted = (
+                snapshot.exchange_id in self._config.recycle_exchange_ids
+                or (
+                    snapshot.now_monotonic_ns <= self._rotation_recycle_expires_ns
+                    and snapshot.exchange_id in self._rotation_recycle_ids
+                )
+            )
+            if conserve or targeted:
+                if not portfolio.account_trusted or portfolio.proxy_active:
+                    gate = GateDecision(GateMode.CANCEL, "capital_recycle_account_untrusted")
+                else:
+                    low, high = portfolio.worst_case_inventory_bounds(
+                        snapshot.exchange_id, snapshot.tournament_id
+                    )
+                    if low > 0:
+                        gate = GateDecision(GateMode.ASK_ONLY, "capital_recycle_reduce_only")
+                    elif high < 0:
+                        gate = GateDecision(GateMode.BID_ONLY, "capital_recycle_reduce_only")
+                    else:
+                        gate = GateDecision(GateMode.CANCEL, "capital_recycle_no_proven_holdings")
 
         if gate.mode in {GateMode.HOLD, GateMode.CANCEL, GateMode.SUSPEND, GateMode.NO_TRADE}:
             return MakerDecision(

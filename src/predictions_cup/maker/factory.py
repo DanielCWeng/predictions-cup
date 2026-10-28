@@ -97,6 +97,12 @@ def build_maker_components(
         and record.direct_polymarket is not None
     }
 
+    if settings.maker_capital_headroom_shares > 0 and (
+        settings.risk_max_gross_exposure is None
+        or settings.maker_capital_headroom_shares >= settings.risk_max_gross_exposure
+    ):
+        raise ValueError("maker capital reserve must be below the configured gross risk cap")
+
     ms = 1_000_000
     engine = MakerEngine(
         fair_value=DirectPolymarketFairValueProvider(mapping),
@@ -142,6 +148,19 @@ def build_maker_components(
             deep_ladder_level_offsets=settings.maker_deep_ladder_level_offsets,
             deep_ladder_level_sizes=settings.maker_deep_ladder_level_sizes,
             deep_ladder_position_cap=settings.maker_deep_ladder_position_cap,
+            soft_max_gross_exposure=(
+                None if settings.maker_capital_headroom_shares <= 0
+                else max(
+                    1.0,
+                    float(settings.risk_max_gross_exposure or 0)
+                    - settings.maker_capital_headroom_shares,
+                )
+            ),
+            recycle_exchange_ids=frozenset(
+                item.strip()
+                for item in settings.maker_recycle_exchange_ids.split(",")
+                if item.strip()
+            ),
         ),
         market_token_ids=market_token_ids,
     )

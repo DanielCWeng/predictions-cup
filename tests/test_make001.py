@@ -278,6 +278,8 @@ def _engine(
     fill_seeking_min_edge: float = 0.02,
     deep_ladder_enabled: bool = False,
     deep_ladder_position_cap: int = 200,
+    soft_max_gross_exposure: float | None = None,
+    recycle_exchange_ids: frozenset[str] = frozenset(),
 ) -> MakerEngine:
     provider = DirectPolymarketFairValueProvider(
         _mapping(
@@ -308,6 +310,8 @@ def _engine(
             fill_seeking_min_edge=fill_seeking_min_edge,
             deep_ladder_enabled=deep_ladder_enabled,
             deep_ladder_position_cap=deep_ladder_position_cap,
+            soft_max_gross_exposure=soft_max_gross_exposure,
+            recycle_exchange_ids=recycle_exchange_ids,
         ),
         market_token_ids={"36": "token-yes"},
     )
@@ -3159,3 +3163,193 @@ def test_live_bulk_price_refresh_has_headroom_inside_configured_bbo_age() -> Non
     assert _maker_bulk_price_refresh_seconds(5.0) == 10.0
     assert _maker_bulk_price_refresh_seconds(14.0) == 14.0
     assert _maker_bulk_price_refresh_seconds(20.0) == 20.0
+
+
+def test_recycle_target_quotes_only_proven_inventory_reductions() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}))
+    positive = maker.quote(_maker_snapshot(signed_inventory=5.0))
+    assert positive.desired is not None
+    assert positive.desired.bid_size == 0
+    assert positive.desired.ask_size > 0
+    assert positive.gate.reason == "capital_recycle_reduce_only"
+
+    negative = maker.quote(_maker_snapshot(signed_inventory=-5.0))
+    assert negative.desired is not None
+    assert negative.desired.bid_size > 0
+    assert negative.desired.ask_size == 0
+
+    flat = maker.quote(_maker_snapshot())
+    assert flat.desired is None
+    assert flat.gate.reason == "capital_recycle_no_proven_holdings"
+
+
+def test_soft_cap_only_reduces_when_aggregate_gross_exceeds_reserve() -> None:
+    maker = _engine(soft_max_gross_exposure=3)
+    approaching = maker.quote(_maker_snapshot(signed_inventory=5.0))
+    assert approaching.desired is not None
+    assert approaching.desired.bid_size == 0
+    assert approaching.desired.ask_size > 0
+
+    below = maker.quote(_maker_snapshot(signed_inventory=2.0))
+    assert below.desired is not None
+    assert below.desired.bid_size > 0
+    assert below.desired.ask_size > 0
+
+
+def test_recycling_suppresses_quoting_without_trusted_signed_holdings() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}))
+    untrusted = maker.quote(_maker_snapshot(signed_inventory=5.0, account_trusted=False))
+    assert untrusted.desired is None
+
+    with pytest.raises(ValueError, match="numeric"):
+        MakerConfig(recycle_exchange_ids=frozenset({"tx15"}))
+
+
+def test_background_cancel_recovery_keeps_maker_worker_responsive(
+    tmp_path: Path,
+) -> None:
+    """UNCERTAIN is immediate; only a bounded background task reads recovery."""
+    journal = ExecutionJournal(tmp_path / "background-cancel.sqlite3")
+    live = _AlwaysUncertainCancelLiveSink(journal)
+    adapter = LiveMakerExecutionAdapter(
+        cast(SigLiveSink, live), journal=journal, quotes=QuoteRegistry(),
+    )
+    started = asyncio.Event()
+    release = asyncio.Event()
+    reconciled: list[str] = []
+
+    async def resolver(operation_id: str) -> None:
+        started.set()
+        await release.wait()
+        reconciled.append(operation_id)
+        journal.mark_state(operation_id, LifecycleState.CANCELLED, NOW + 22)
+
+    adapter.set_cancel_uncertainty_resolver(resolver)
+    adapter.enable_background_cancel_recovery()
+
+    async def scenario() -> None:
+        with pytest.raises(SigExecutionUncertainError):
+            await asyncio.wait_for(
+                adapter.cancel(
+                    _active(QuoteSide.BID, ticks=99, order_id=91),
+                    "cancel-op",
+                    TOURNAMENT,
+                ),
+                timeout=0.25,
+            )
+        assert journal.lifecycle_state("cancel-op") is LifecycleState.UNCERTAIN
+        await asyncio.wait_for(started.wait(), timeout=0.25)
+        assert len(adapter._cancel_recovery_tasks) == 1
+        release.set()
+        await asyncio.sleep(0.005)
+        assert reconciled == ["cancel-op"]
+        assert journal.lifecycle_state("cancel-op") is LifecycleState.CANCELLED
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        journal.close()
+
+
+def test_background_cancel_recovery_timeout_does_not_clear_uncertainty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    journal = ExecutionJournal(tmp_path / "background-timeout.sqlite3")
+    live = _AlwaysUncertainCancelLiveSink(journal)
+    adapter = LiveMakerExecutionAdapter(
+        cast(SigLiveSink, live), journal=journal, quotes=QuoteRegistry(),
+    )
+    monkeypatch.setattr(maker_adapters_module, "_CANCEL_RECOVERY_TIMEOUT_SECONDS", 0.01)
+
+    async def never_finishes(_: str) -> None:
+        await asyncio.Event().wait()
+
+    adapter.set_cancel_uncertainty_resolver(never_finishes)
+    adapter.enable_background_cancel_recovery()
+
+    async def scenario() -> None:
+        with pytest.raises(SigExecutionUncertainError):
+            await adapter.cancel(
+                _active(QuoteSide.BID, ticks=99, order_id=91),
+                "cancel-op", TOURNAMENT,
+            )
+        # Wait for the bounded task itself, not an assumed scheduler delay.
+        await asyncio.wait_for(
+            asyncio.gather(*adapter._cancel_recovery_tasks.values()),
+            timeout=0.25,
+        )
+        await asyncio.sleep(0)  # Let its done callback remove the task.
+        assert journal.lifecycle_state("cancel-op") is LifecycleState.UNCERTAIN
+        assert not adapter._cancel_recovery_tasks
+        assert "operation_id=cancel-op" in caplog.text
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        journal.close()
+
+
+def test_rotation_passive_targets_are_reduce_only_and_expire() -> None:
+    """Changing an advisory exit target cannot create a new bid or short."""
+    engine = _engine()
+    held_yes = _maker_snapshot(signed_inventory=5)
+    baseline = engine.quote(held_yes)
+    assert baseline.gate.mode is GateMode.NORMAL
+
+    engine.set_rotation_recycle_targets(frozenset({"36"}), observed_ns=NOW, ttl_ns=1)
+    reduced = engine.quote(held_yes)
+    assert reduced.gate.mode is GateMode.ASK_ONLY
+    assert reduced.gate.reason == "capital_recycle_reduce_only"
+    assert reduced.desired is not None
+    assert reduced.desired.bid_ticks is None
+
+    # Normal quoting resumes when the advisory signal expires. No background
+    # timer, DB activity or external read is required for expiry.
+    later = replace(
+        held_yes,
+        now_monotonic_ns=NOW + 2,
+        runtime=replace(held_yes.runtime, observation_monotonic_ns=NOW + 2),
+    )
+    assert engine.quote(later).gate.mode is GateMode.NORMAL
+
+
+def test_rotation_passive_targets_cover_no_and_flat_inventory() -> None:
+    engine = _engine()
+    engine.set_rotation_recycle_targets(frozenset({"36"}), observed_ns=NOW)
+    held_no = engine.quote(_maker_snapshot(signed_inventory=-5))
+    assert held_no.gate.mode is GateMode.BID_ONLY
+    assert held_no.desired is not None and held_no.desired.ask_ticks is None
+
+    flat = engine.quote(_maker_snapshot(signed_inventory=0))
+    assert flat.gate.mode is GateMode.CANCEL
+    assert flat.gate.reason == "capital_recycle_no_proven_holdings"
+    engine.set_rotation_recycle_targets(frozenset(), observed_ns=NOW)
+    assert engine.quote(_maker_snapshot(signed_inventory=-5)).gate.mode is GateMode.NORMAL
+
+
+def test_rotation_passive_targets_reject_unbounded_or_opaque_ids() -> None:
+    engine = _engine()
+    with pytest.raises(ValueError):
+        engine.set_rotation_recycle_targets(frozenset({"market-name"}), observed_ns=NOW)
+    with pytest.raises(ValueError):
+        engine.set_rotation_recycle_targets(
+            frozenset(str(i) for i in range(10)), observed_ns=NOW,
+        )
+
+
+def test_rotation_mapping_requires_verified_exact_same_contract() -> None:
+    from predictions_cup.maker.residual_live import rotation_mapped_token
+
+    exact = _mapping().records[0]
+    assert rotation_mapped_token(exact) == "token-yes"
+    assert rotation_mapped_token(None) is None
+    assert rotation_mapped_token(
+        _mapping(direction=MappingDirection.COMPLEMENT).records[0]
+    ) is None
+    assert rotation_mapped_token(
+        _mapping(mapping_class=MappingClass.NEAR).records[0]
+    ) is None
+    assert rotation_mapped_token(
+        exact.model_copy(update={"status": MappingStatus.REVIEW_REQUIRED})
+    ) is None

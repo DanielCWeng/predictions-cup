@@ -93,6 +93,10 @@ class AppSettings(BaseSettings):
     maker_deep_ladder_level_sizes: tuple[int, ...] = (50, 100, 150)
     maker_deep_ladder_position_cap: int = Field(default=200, gt=0)
     maker_inventory_risk_aversion: float = Field(default=0.02, ge=0.0)
+    # Soft capital target only for MAKE quote admission; does not alter RISK-002.
+    maker_capital_headroom_shares: int = Field(default=0, ge=0)
+    # Exact SIG exchange IDs to unwind through existing RISK/BUILD-009 maker.
+    maker_recycle_exchange_ids: str = ""
     maker_uncertainty_multiplier: float = Field(default=1.0, ge=0.0)
     maker_volatility_multiplier: float = Field(default=0.5, ge=0.0)
     maker_toxicity_half_spread_ticks: float = Field(default=4.0, ge=0.0)
@@ -122,6 +126,12 @@ class AppSettings(BaseSettings):
     # attribution. It is opt-in and constrained to the explicit live universe.
     residual_taker_enabled: bool = False
     residual_taker_shadow_only: bool = True
+    # Optional PASSIVE capital recycling: allocator-nominated holdings become
+    # reduce-only on the existing maker. Does not enable two-leg taker orders.
+    rotation_passive_recycling_enabled: bool = False
+    # Execute independently risk-approved, economically positive reducing
+    # exits and release capital for later independently priced entries.
+    rotation_active_exits_enabled: bool = True
     residual_taker_size: int = Field(default=50, gt=0, le=2_147_483_647)
     residual_taker_exchange_ids: str = ""
     residual_taker_max_pm_book_age_ms: int = Field(default=35_000, gt=0)
@@ -137,6 +147,10 @@ class AppSettings(BaseSettings):
     residual_taker_latency_haircut: float = Field(default=0.005, ge=0.0, le=1.0)
     residual_taker_adverse_haircut: float = Field(default=0.005, ge=0.0, le=1.0)
     residual_taker_max_sig_depth_age_ms: int = Field(default=1500, gt=0)
+    # Only a versioned streamed full book independently corroborated by the
+    # newer scalar BBO and live WS continuity may use this extended window.
+    # REST books and all uncorroborated depth retain the 1.5s default.
+    residual_taker_max_sig_stream_depth_age_ms: int = Field(default=15000, gt=0, le=30000)
     residual_taker_max_fair_age_ms: int = Field(default=5000, gt=0)
 
     # SHADOW-002 is disabled by default and has no order-write capability.
@@ -184,7 +198,11 @@ class AppSettings(BaseSettings):
     # every process on the host also draws from one flock-guarded token bucket
     # at this combined rate; HIGH (execution) priority keeps a reserved token.
     sig_rest_account_budget_path: Path | None = None
-    sig_rest_account_rate_per_second: float = Field(default=3.0, gt=0.0, le=100.0)
+    sig_rest_account_rate_per_second: float = Field(default=1.6, gt=0.0, le=100.0)
+    # Independent write admission; reserve the write limit for cancels and taker.
+    # 0.45/s with a two-request burst stays below 30 writes in any 60s window.
+    sig_rest_write_governor_rate_per_second: float = Field(default=0.45, gt=0.0, le=1.0)
+    sig_rest_write_account_rate_per_second: float = Field(default=0.45, gt=0.0, le=1.0)
     sig_rest_shared_cooldown_max_seconds: float = Field(default=8.0, ge=0.5, le=120.0)
     sig_realtime_open_book_refresh_seconds: float = Field(default=30.0, ge=1.0, le=300.0)
     sig_realtime_bulk_price_refresh_seconds: float = Field(default=10.0, ge=1.0, le=300.0)
@@ -472,6 +490,10 @@ class AppSettings(BaseSettings):
             "maker_minimum_size": self.maker_minimum_size,
             "maker_base_half_spread_ticks": self.maker_base_half_spread_ticks,
             "maker_inventory_risk_aversion": self.maker_inventory_risk_aversion,
+            "maker_capital_headroom_shares": self.maker_capital_headroom_shares,
+            "maker_recycle_exchange_count": len(
+                {x.strip() for x in self.maker_recycle_exchange_ids.split(",") if x.strip()}
+            ),
             "maker_uncertainty_multiplier": self.maker_uncertainty_multiplier,
             "maker_volatility_multiplier": self.maker_volatility_multiplier,
             "maker_toxicity_half_spread_ticks": self.maker_toxicity_half_spread_ticks,
@@ -530,6 +552,13 @@ class AppSettings(BaseSettings):
                 }
             ),
             "sig_rest_governor_rate_per_second": self.sig_rest_governor_rate_per_second,
+            "sig_rest_account_rate_per_second": self.sig_rest_account_rate_per_second,
+            "sig_rest_write_governor_rate_per_second": (
+                self.sig_rest_write_governor_rate_per_second
+            ),
+            "sig_rest_write_account_rate_per_second": (
+                self.sig_rest_write_account_rate_per_second
+            ),
             "sig_rest_shared_cooldown_max_seconds": (self.sig_rest_shared_cooldown_max_seconds),
             "sig_realtime_open_book_refresh_seconds": (self.sig_realtime_open_book_refresh_seconds),
             "sig_realtime_bulk_price_refresh_seconds": (
