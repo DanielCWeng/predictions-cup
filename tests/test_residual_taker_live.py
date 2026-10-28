@@ -1005,7 +1005,7 @@ def test_rotation_capital_priority_expires_automatically() -> None:
     harness.coordinator._active_rotation_exits = True
     harness.coordinator._rotation_pending_entries["other-entry"] = _PendingRotationEntry(
         "prior:exit", "prior", "other-entry", "BUY", TOURNAMENT,
-        50, 50, .01, NOW - 5, NOW - 75_000_000_001,
+        50, 50, .01, NOW - 5, NOW - 180_000_000_001,
     )
     harness.run(_snapshot())
     assert len(harness.plans) == 1
@@ -1084,3 +1084,18 @@ def test_capital_headroom_respects_tournament_capacity() -> None:
     ))
     context = replace(base, limits=limits, capital_state=capital)
     assert harness.coordinator._capital_headroom_quantity(snapshot, context, 50) == 4
+
+
+def test_rotation_priority_remains_active_after_old_75_second_expiry() -> None:
+    """A 90-second delayed account reconciliation cannot lose its reserved room."""
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries["other-entry"] = _PendingRotationEntry(
+        "prior:exit", "prior", "other-entry", "BUY", TOURNAMENT,
+        50, 50, .01, NOW - 5, NOW - 90_000_000_000,
+    )
+    harness.run(_snapshot())
+    assert harness.plans == []
+    assert harness.coordinator._skipped_signals["rotation_capacity_priority"] == 1
