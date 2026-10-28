@@ -269,6 +269,51 @@ class ResidualTakerLiveCoordinator:
                 len(self._rotation_evidence.history),
             )
 
+    def _rotation_alternative_beats_target(
+        self, *, net_per_share: float | None, quantity: int, now_ns: int,
+    ) -> str | None:
+        """Offer released capital to a better live opportunity, not merely first arrival.
+
+        The competing ordinary taker must clear the strongest queued replacement
+        by an additional execution buffer. An unpriced/stale target is never
+        assumed to have zero value merely to permit unrelated consumption.
+        """
+        allocator = self._rotation_allocator
+        if (
+            allocator is None or net_per_share is None
+            or not math.isfinite(net_per_share) or net_per_share <= 0
+            or quantity < 1
+        ):
+            return None
+        best_id: str | None = None
+        best_edge = -math.inf
+        for eid, pending in self._rotation_pending_entries.items():
+            if now_ns < pending.created_ns or now_ns - pending.created_ns >= 75_000_000_000:
+                continue
+            entry = allocator.entries.get(eid)
+            if (
+                entry is None or now_ns < entry.observed_ns
+                or now_ns - entry.observed_ns > allocator.max_age_ns
+            ):
+                return None
+            size = min(quantity, entry.capacity, pending.exit_shares)
+            if size < 1:
+                return None
+            expected = entry.net_ev(size)
+            if expected is None:
+                return None
+            if expected / size > best_edge:
+                best_edge = expected / size
+                best_id = eid
+        # Require an economically meaningful improvement instead of bouncing
+        # between exchange books due to one-tick noise.
+        if (
+            best_id is not None
+            and net_per_share > best_edge + allocator.rotation_buffer
+        ):
+            return best_id
+        return None
+
     def _publish_rotation_priority(self, now_ns: int) -> bool:
         """Prefer the planned replacement for a short window after an exit."""
         active = self._active_rotation_exits and any(
@@ -1220,22 +1265,6 @@ class ResidualTakerLiveCoordinator:
                 signal.direction,
             )
             return ()
-        # An exit's reclaimed capacity should go first to its selected
-        # replacement. Continue allowing unrelated inventory reductions.
-        if self._publish_rotation_priority(snapshot.now_monotonic_ns):
-            target = any(
-                pending.entry_exchange_id == exchange_id
-                and pending.entry_direction == signal.direction
-                for pending in self._rotation_pending_entries.values()
-            )
-            signed = held.signed_inventory(exchange_id, snapshot.tournament_id)
-            reducing = (
-                (action is OrderAction.BUY and signed <= -quantity)
-                or (action is OrderAction.SELL and signed >= quantity)
-            )
-            if not target and not reducing:
-                self._skipped_signals["rotation_capacity_priority"] += 1
-                return ()
         # Only inventory guaranteed to shrink under every partial fill may
         # offset new collateral in the conservative cash screen.
         low, high = held.worst_case_inventory_bounds(snapshot.exchange_id, snapshot.tournament_id)
@@ -1317,6 +1346,29 @@ class ResidualTakerLiveCoordinator:
                 economics_net = economics.net_edge_per_share
                 assert economics.limit_price_ticks is not None
                 ticks = economics.limit_price_ticks
+        # Reserve exit proceeds for the selected entry, except when a new
+        # independently priced residual has *better* executable marginal EV.
+        # A reducing trade is always permitted as it releases more capital.
+        redirect_from: str | None = None
+        if self._publish_rotation_priority(snapshot.now_monotonic_ns):
+            target = any(
+                pending.entry_exchange_id == exchange_id
+                and pending.entry_direction == signal.direction
+                for pending in self._rotation_pending_entries.values()
+            )
+            signed = held.signed_inventory(exchange_id, snapshot.tournament_id)
+            reducing = (
+                (action is OrderAction.BUY and signed <= -quantity)
+                or (action is OrderAction.SELL and signed >= quantity)
+            )
+            if not target and not reducing:
+                redirect_from = self._rotation_alternative_beats_target(
+                    net_per_share=economics_net, quantity=quantity,
+                    now_ns=snapshot.now_monotonic_ns,
+                )
+                if redirect_from is None:
+                    self._skipped_signals["rotation_capacity_priority"] += 1
+                    return ()
         if self._crosses_own_quote(exchange_id, action, ticks):
             self._skipped_signals["own_quote_at_touch"] += 1
             _LOG.debug(
@@ -1412,6 +1464,28 @@ class ResidualTakerLiveCoordinator:
                 ),
             )
         _LOG.info("TAKE outcome op=%s state=%s", logical_operation_id, event.state.value)
+        if redirect_from is not None and event.state is LifecycleState.FILLED:
+            # The ordinary taker has genuinely filled the better alternative.
+            # Move the investment target; the reconciled-position check will
+            # verify the new market fill before calling the rotation complete.
+            original = self._rotation_pending_entries.pop(redirect_from, None)
+            if original is not None:
+                signed_before = snapshot.runtime.portfolio.signed_inventory(
+                    exchange_id, snapshot.tournament_id,
+                )
+                self._rotation_pending_entries[exchange_id] = replace(
+                    original,
+                    entry_exchange_id=exchange_id,
+                    entry_direction=signal.direction,
+                    entry_before_signed=int(signed_before),
+                )
+                _LOG.info(
+                    "ROTATION capital redirected from=%s to=%s "
+                    "improved_net_per_share=%.5f",
+                    redirect_from, exchange_id, economics_net,
+                )
+                if self._request_rotation_recheck is not None:
+                    self._request_rotation_recheck(frozenset({exchange_id}))
         events = [event]
         cancel_event = await self._cancel_remainder(plan, event, snapshot.tournament_id)
         if cancel_event is not None:
