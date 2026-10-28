@@ -812,8 +812,10 @@ def test_rotation_exit_rejects_stale_depth_before_any_order() -> None:
 
 
 @pytest.mark.parametrize("direction,tick", [("BUY", 140), ("SELL", 139)])
+@pytest.mark.parametrize("already_acquired", [0, 50])
 def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
     monkeypatch: pytest.MonkeyPatch, direction: str, tick: int,
+    already_acquired: int,
 ) -> None:
     """A real entry follows reconciled exit fills, not a placement ACK."""
     from types import SimpleNamespace
@@ -851,8 +853,15 @@ def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
     ]
     harness.journal = journal
     harness.coordinator._journal = cast(ExecutionJournal, journal)
+    entry_existing = () if already_acquired == 0 else (
+        RuntimePosition(
+            EXCHANGE, MARKET, TOURNAMENT, already_acquired,
+            already_acquired if direction == "BUY" else -already_acquired,
+        ),
+    )
     portfolio = RuntimePortfolio(
-        positions=(RuntimePosition("old", "oldmarket", TOURNAMENT, 50, 50),),
+        positions=(RuntimePosition("old", "oldmarket", TOURNAMENT, 50, 50),)
+        + entry_existing,
         orders=(), account_trusted=True,
         account_trust_grade=AccountTrustGrade.TRUSTED,
     )
@@ -911,9 +920,14 @@ def test_rotation_reinvestment_requires_attributed_exit_and_fresh_risk(
     monkeypatch.setattr(residual_live_module, "evaluate_risk", approve)
     change = MakerStateChange("reinvest", NOW, frozenset({EXCHANGE}))
     events = asyncio.run(harness.coordinator._execute_rotation_entry(change, snapshot))
-    assert len(events) == 2
-    assert len(harness.plans) == 1 and len(harness.cancels) == 1
-    assert journal.claims == {"rotation-123:entry"}
+    if already_acquired:
+        assert events == ()
+        assert not harness.plans and not harness.cancels
+        assert journal.claims == set()
+    else:
+        assert len(events) == 2
+        assert len(harness.plans) == 1 and len(harness.cancels) == 1
+        assert journal.claims == {"rotation-123:entry"}
     assert EXCHANGE not in harness.coordinator._rotation_pending_entries
 
 
