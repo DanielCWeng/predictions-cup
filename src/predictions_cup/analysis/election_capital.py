@@ -13,6 +13,7 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 from predictions_cup.config.settings import AppSettings
 from predictions_cup.sig.client import SigRestClient
@@ -173,7 +174,14 @@ def main() -> int:
     p.add_argument("--max-positions", type=int, default=12)
     p.add_argument("--size-limit", type=int, default=2500)
     p.add_argument("--depth", type=int, default=20)
+    p.add_argument("--runtime-env", type=Path, default=None)
     args = p.parse_args()
+    if args.runtime_env is not None:
+        from dotenv import load_dotenv
+
+        if not args.runtime_env.is_file():
+            p.error("runtime environment file not found")
+        load_dotenv(args.runtime_env, override=True)
     try:
         result = asyncio.run(scan_capital(
             max_positions=args.max_positions,
