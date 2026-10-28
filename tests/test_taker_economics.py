@@ -8,6 +8,7 @@ from predictions_cup.maker.taker_economics import (
     Direction,
     TakerEconomics,
     evaluate_taker_economics,
+    growth_optimal_quantity,
 )
 from predictions_cup.runtime.models import RuntimeLevel
 
@@ -147,3 +148,60 @@ def test_provably_reducing_inventory_needs_no_new_collateral() -> None:
 
 def test_negative_reducible_inventory_fails_closed() -> None:
     assert _eval(reducible_inventory_shares=-1).reason == "invalid_inventory"
+
+
+def test_wi01_small_edge_cannot_justify_uncapped_22998_shares() -> None:
+    """Expected growth is not raw EV multiplied by unlimited contracts."""
+    quantity = growth_optimal_quantity(
+        desired_quantity=22_998,
+        outcome_cost=0.515,
+        fair_probability=0.54,
+        execution_cost_per_share=0.01,
+        equity=100_760.12,
+        already_held_shares=3_100,
+        reference_depth_shares=50_000,
+    )
+    # Conservatively valued p(NO)=.53: approximately 3.1% Kelly bankroll,
+    # less the inventory already held in this same binary outcome.
+    assert 0 < quantity < 4_000
+    assert quantity * 0.515 < 2_000
+    assert quantity < 22_998
+
+
+def test_growth_sizing_refuses_to_extrapolate_thin_reference_quote() -> None:
+    quantity = growth_optimal_quantity(
+        desired_quantity=20_000,
+        outcome_cost=0.40,
+        fair_probability=0.55,
+        execution_cost_per_share=0.01,
+        equity=100_000,
+        already_held_shares=0,
+        reference_depth_shares=80,
+    )
+    assert quantity == 80
+
+
+def test_growth_sizing_has_no_bet_without_conservative_edge() -> None:
+    assert growth_optimal_quantity(
+        desired_quantity=1_000,
+        outcome_cost=0.515,
+        fair_probability=0.52,
+        execution_cost_per_share=0.01,
+        equity=100_000,
+        already_held_shares=0,
+        reference_depth_shares=1_000,
+    ) == 0
+
+
+def test_growth_sizing_counts_existing_same_side_holdings() -> None:
+    def size(held: float) -> int:
+        return growth_optimal_quantity(
+            desired_quantity=100_000,
+            outcome_cost=0.40,
+            fair_probability=0.55,
+            execution_cost_per_share=0.01,
+            equity=100_000.0,
+            reference_depth_shares=100_000.0,
+            already_held_shares=held,
+        )
+    assert size(1_000) == max(0, size(0) - 1_000)

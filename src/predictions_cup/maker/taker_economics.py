@@ -37,6 +37,51 @@ class TakerEconomics:
         return self.reason == "take" and self.quantity > 0
 
 
+def growth_optimal_quantity(
+    *,
+    desired_quantity: int,
+    outcome_cost: float,
+    fair_probability: float,
+    execution_cost_per_share: float,
+    equity: float,
+    already_held_shares: float,
+    reference_depth_shares: float,
+) -> int:
+    """Bankroll-growth and reference-liquidity bound, not a fixed position cap.
+
+    Binary contracts pay 1 on success, 0 otherwise. Full Kelly is the stake
+    fraction (p - c) / (1 - c), where p is the conservative success probability
+    after execution costs and c is the worst executable unit cost. Account for
+    already held same-side shares and do not extrapolate a Polymarket best
+    quote beyond its actually displayed side depth. The central risk engine
+    still checks admissibility and cash separately.
+    """
+    inputs = (
+        outcome_cost, fair_probability, execution_cost_per_share,
+        equity, already_held_shares, reference_depth_shares,
+    )
+    if (
+        desired_quantity <= 0
+        or any(not math.isfinite(x) for x in inputs)
+        or not 0.0 < outcome_cost < 1.0
+        or not 0.0 <= fair_probability <= 1.0
+        or min(execution_cost_per_share, equity, already_held_shares,
+               reference_depth_shares) < 0.0
+    ):
+        return 0
+    p = max(0.0, fair_probability - execution_cost_per_share)
+    if p <= outcome_cost:
+        return 0
+    bankroll_fraction = (p - outcome_cost) / (1.0 - outcome_cost)
+    funded_total_shares = math.floor(bankroll_fraction * equity / outcome_cost)
+    incremental = max(0, funded_total_shares - math.ceil(already_held_shares))
+    return min(
+        desired_quantity,
+        max(0, math.floor(reference_depth_shares)),
+        incremental,
+    )
+
+
 def evaluate_taker_economics(
     *,
     direction: Direction,

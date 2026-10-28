@@ -52,7 +52,12 @@ from predictions_cup.maker.residual_taker import (
 )
 from predictions_cup.maker.rotation_recovery import RotationEvidence, RotationEvidenceCache
 from predictions_cup.maker.safety import MakerKillSwitch
-from predictions_cup.maker.taker_economics import Direction, evaluate_taker_economics
+from predictions_cup.maker.taker_economics import (
+    Direction,
+    TakerEconomics,
+    evaluate_taker_economics,
+    growth_optimal_quantity,
+)
 from predictions_cup.mapping.models import (
     MappingClass,
     MappingDirection,
@@ -220,6 +225,8 @@ class ResidualTakerLiveCoordinator:
         self._no_residual_markets = 0
         self._signals = 0
         self._attempted_orders = 0
+        # An ACK/fill is not an issuer-reconciled cash or position refresh.
+        self._last_filled_account_ns: dict[str, int] = {}
         self._skipped_signals: Counter[str] = Counter()
         # Fixed-size diagnostic: distinguish missing WS corroboration from
         # genuinely old ladders without logging per-candidate hot-path events.
@@ -1253,6 +1260,18 @@ class ResidualTakerLiveCoordinator:
         exchange_id = snapshot.exchange_id
         book = snapshot.runtime.book(exchange_id)
         assert book is not None and book.bids and book.asks
+        # Do not spend the same pre-fill cash twice. After a FILLED order,
+        # require a subsequent trusted account observation on this market.
+        last_fill_account_ns = self._last_filled_account_ns.get(exchange_id)
+        if last_fill_account_ns is not None:
+            if (
+                snapshot.account_observed_ns <= last_fill_account_ns
+                or snapshot.runtime.portfolio.trust_grade
+                    is not AccountTrustGrade.TRUSTED
+            ):
+                self._skipped_signals["post_fill_reconciliation_required"] += 1
+                return ()
+            self._last_filled_account_ns.pop(exchange_id, None)
         # The battery convention is YES-side: BUY lifts the SIG ask, SELL hits
         # the SIG bid. SIG canonicalises a flat YES sell to a NO buy itself.
         if signal.direction == "BUY":
@@ -1381,36 +1400,102 @@ class ResidualTakerLiveCoordinator:
             if signal.direction not in ("BUY", "SELL"):
                 return ()
             levels = book.asks if action is OrderAction.BUY else book.bids
-            economics = evaluate_taker_economics(
-                direction=cast(Direction, signal.direction),
-                levels=levels,
-                conservative_fair=fair_bound,
-                desired_quantity=quantity,
-                trusted_depth=bool(snapshot.sig_depth_trusted and book.trusted_depth),
-                book_age_ns=(
-                    -1
-                    if snapshot.sig_depth_observed_ns is None
-                    else snapshot.now_monotonic_ns - snapshot.sig_depth_observed_ns
-                ),
-                reference_age_ns=snapshot.now_monotonic_ns - external.observed_monotonic_ns,
-                max_book_age_ns=depth_age_limit_ns,
-                max_reference_age_ns=self._max_fair_age_ns,
-                fee_per_share=self._fee_per_share,
-                latency_haircut=self._latency_haircut,
-                adverse_selection_haircut=self._adverse_haircut,
-                min_net_edge_per_share=self._min_net_edge,
-                available_cash=(
-                    None
-                    if snapshot.runtime.portfolio.account_proxy_cash_balance is None
-                    else float(snapshot.runtime.portfolio.account_proxy_cash_balance)
-                ),
-                reducible_inventory_shares=reducible,
-                maker_price_ticks=(
-                    book.bids[0].price_ticks
-                    if action is OrderAction.BUY
-                    else book.asks[0].price_ticks
-                ),
+            def reprice(requested_quantity: int) -> TakerEconomics:
+                    return evaluate_taker_economics(
+                    direction=cast(Direction, signal.direction),
+                    levels=levels,
+                    conservative_fair=fair_bound,
+                    desired_quantity=requested_quantity,
+                    trusted_depth=bool(snapshot.sig_depth_trusted and book.trusted_depth),
+                    book_age_ns=(
+                        -1
+                        if snapshot.sig_depth_observed_ns is None
+                        else snapshot.now_monotonic_ns - snapshot.sig_depth_observed_ns
+                    ),
+                    reference_age_ns=snapshot.now_monotonic_ns - external.observed_monotonic_ns,
+                    max_book_age_ns=depth_age_limit_ns,
+                    max_reference_age_ns=self._max_fair_age_ns,
+                    fee_per_share=self._fee_per_share,
+                    latency_haircut=self._latency_haircut,
+                    adverse_selection_haircut=self._adverse_haircut,
+                    min_net_edge_per_share=self._min_net_edge,
+                    available_cash=(
+                        None
+                        if snapshot.runtime.portfolio.account_proxy_cash_balance is None
+                        else float(snapshot.runtime.portfolio.account_proxy_cash_balance)
+                    ),
+                    reducible_inventory_shares=reducible,
+                    maker_price_ticks=(
+                        book.bids[0].price_ticks
+                        if action is OrderAction.BUY
+                        else book.asks[0].price_ticks
+                    ),
             )
+            economics = reprice(quantity)
+            # Polymarket is our probability reference, not an unlimited
+            # executable guarantee. Do not use a best quote to price orders
+            # larger than the displayed liquidity supporting that quote.
+            quote_shares = (
+                external.best_bid_size if action is OrderAction.BUY
+                else external.best_ask_size
+            )
+            if (
+                quote_shares is None or not math.isfinite(quote_shares)
+                or quote_shares < 1
+            ):
+                self._skipped_signals["reference_depth_untrusted"] += 1
+                return ()
+            if economics.admissible and self._economics_gate_enabled:
+                requested = min(economics.quantity, math.floor(quote_shares))
+                if requested < 1:
+                    self._skipped_signals["reference_depth_insufficient"] += 1
+                    return ()
+                capital = decision_context.capital_state
+                if capital is not None:
+                    signed_full = (
+                        economics.quantity if action is OrderAction.BUY
+                        else -economics.quantity
+                    )
+                    if not held.is_inventory_reducing(
+                        exchange_id=exchange_id,
+                        tournament_id=snapshot.tournament_id,
+                        signed_delta=signed_full,
+                    ):
+                        low, high = held.worst_case_inventory_bounds(
+                            exchange_id, snapshot.tournament_id,
+                        )
+                        same_side_shares = (
+                            max(0.0, high) if action is OrderAction.BUY
+                            else max(0.0, -low)
+                        )
+                        # A YES sale is a NO purchase unless issuer-reconciled
+                        # inventory proves it is a pure YES reduction.
+                        cost = (
+                            economics.limit_price_ticks / 200.0
+                            if action is OrderAction.BUY else
+                            1.0 - economics.limit_price_ticks / 200.0
+                        ) if economics.limit_price_ticks is not None else 0.0
+                        p = (
+                            fair_bound if action is OrderAction.BUY
+                            else 1.0 - fair_bound
+                        )
+                        requested = growth_optimal_quantity(
+                            desired_quantity=requested,
+                            outcome_cost=cost,
+                            fair_probability=p,
+                            execution_cost_per_share=(
+                                self._fee_per_share + self._latency_haircut
+                                + self._adverse_haircut
+                            ),
+                            equity=float(capital.current_equity),
+                            already_held_shares=same_side_shares,
+                            reference_depth_shares=quote_shares,
+                        )
+                if requested < 1:
+                    self._skipped_signals["ev_growth_or_depth_no_room"] += 1
+                    return ()
+                if requested != economics.quantity:
+                    economics = reprice(requested)
             _LOG.log(
                 logging.INFO if economics.admissible else logging.DEBUG,
                 "TAKE economics %s exchange=%s direction=%s reason=%s qty=%d "
@@ -1551,6 +1636,8 @@ class ResidualTakerLiveCoordinator:
                 ),
             )
         _LOG.info("TAKE outcome op=%s state=%s", logical_operation_id, event.state.value)
+        if event.state is LifecycleState.FILLED:
+            self._last_filled_account_ns[exchange_id] = snapshot.account_observed_ns
         if redirect_from is not None and event.state is LifecycleState.FILLED:
             # The ordinary taker has genuinely filled the better alternative.
             # Move the investment target; the reconciled-position check will

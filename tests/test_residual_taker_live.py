@@ -1099,3 +1099,28 @@ def test_rotation_priority_remains_active_after_old_75_second_expiry() -> None:
     harness.run(_snapshot())
     assert harness.plans == []
     assert harness.coordinator._skipped_signals["rotation_capacity_priority"] == 1
+
+
+def test_live_take_uses_only_displayed_polymarket_reference_depth() -> None:
+    harness = _Harness(economics_gate_enabled=True)
+    harness.coordinator._signal.size = 150
+    harness.coordinator._signal.min_pm_depth = 0
+    snapshot = _snapshot(ask_qty=150)
+    quote = snapshot.external_quotes[TOKEN]
+    snapshot = replace(snapshot, external_quotes={
+        TOKEN: replace(quote, best_bid_size=7.0, best_ask_size=100.0),
+    })
+    harness.run(snapshot)
+    assert len(harness.plans) == 1
+    assert harness.plans[0].intents[0].quantity == 7
+
+
+def test_no_fresh_issuer_account_after_fill_prevents_same_market_repeat() -> None:
+    harness = _Harness(economics_gate_enabled=True, resting=False)
+    harness.coordinator._signal.cooldown_ns = 0
+    snapshot = _snapshot(ask_qty=30)
+    harness.run(snapshot)
+    assert len(harness.plans) == 1
+    harness.run(snapshot, sequence=2)
+    assert len(harness.plans) == 1
+    assert harness.coordinator._skipped_signals["post_fill_reconciliation_required"] == 1
