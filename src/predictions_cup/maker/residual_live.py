@@ -624,8 +624,16 @@ class ResidualTakerLiveCoordinator:
             or context.capital_state.exposure.uncertain_order_exposure != 0
         ):
             return ()
+        levels = book.bids if action is OrderAction.SELL else book.asks
+        # A marketable slice should use whatever *real* bid/ask depth exists,
+        # not reject an otherwise profitable switch when a level disappears.
+        if any(not math.isfinite(level.quantity) or level.quantity < 0 for level in levels):
+            return ()
+        depth_capacity = sum(
+            int(math.floor(level.quantity)) for level in levels[:64]
+        )
         quantity = min(
-            fresh.assessment.shares, abs(int(signed)),
+            fresh.assessment.shares, abs(int(signed)), depth_capacity,
             *(item.max_order_size for item in limits),
             *(max(0, math.floor(
                 item.max_open_order_exposure - portfolio.open_order_exposure
@@ -887,8 +895,14 @@ class ResidualTakerLiveCoordinator:
         ) if item is not None]
         if not limits:
             return ()
+        levels = book.asks if action is OrderAction.BUY else book.bids
+        if any(not math.isfinite(level.quantity) or level.quantity < 0 for level in levels):
+            return ()
+        depth_capacity = sum(
+            int(math.floor(level.quantity)) for level in levels[:64]
+        )
         quantity = min(
-            filled, entry.capacity,
+            filled, entry.capacity, depth_capacity,
             *(item.max_order_size for item in limits),
             *(max(0, math.floor(
                 item.max_open_order_exposure - portfolio.open_order_exposure
