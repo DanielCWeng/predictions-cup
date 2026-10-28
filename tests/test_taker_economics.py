@@ -194,14 +194,14 @@ def test_growth_sizing_has_no_bet_without_conservative_edge() -> None:
 
 
 def test_growth_sizing_counts_existing_same_side_holdings() -> None:
-    common = dict(
-        desired_quantity=100_000,
-        outcome_cost=0.40,
-        fair_probability=0.55,
-        execution_cost_per_share=0.01,
-        equity=100_000.0,
-        reference_depth_shares=100_000.0,
-    )
-    blank = growth_optimal_quantity(**common, already_held_shares=0)
-    existing = growth_optimal_quantity(**common, already_held_shares=1_000)
-    assert existing == max(0, blank - 1_000)
+    def size(held: float) -> int:
+        return growth_optimal_quantity(
+            desired_quantity=100_000,
+            outcome_cost=0.40,
+            fair_probability=0.55,
+            execution_cost_per_share=0.01,
+            equity=100_000.0,
+            reference_depth_shares=100_000.0,
+            already_held_shares=held,
+        )
+    assert size(1_000) == max(0, size(0) - 1_000)
