@@ -297,10 +297,12 @@ class LiquidityWeightedAllocator:
             self._expire(now)
 
     def _expire(self, now_ns: int) -> None:
-        for values in (self.entries, self.exits):
-            for eid, item in tuple(values.items()):
-                if now_ns < item.observed_ns or now_ns - item.observed_ns > self.max_age_ns:
-                    del values[eid]
+        for eid, item in tuple(self.entries.items()):
+            if now_ns < item.observed_ns or now_ns - item.observed_ns > self.max_age_ns:
+                del self.entries[eid]
+        for eid, item in tuple(self.exits.items()):
+            if now_ns < item.observed_ns or now_ns - item.observed_ns > self.max_age_ns:
+                del self.exits[eid]
 
     def rank(self, *, now_ns: int | None = None, limit: int = 3) -> tuple[RankedRotation, ...]:
         if limit < 1:

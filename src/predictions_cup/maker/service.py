@@ -916,7 +916,9 @@ class MakerService:
                         else None
                     ),
                     active_rotation_exits=self.settings.rotation_active_exits_enabled,
-                    request_rotation_recheck=lambda ids: runtime.notify_sig(ids),
+                    request_rotation_recheck=lambda ids: (
+                        runtime.notify_sig(ids) if runtime is not None else None
+                    ),
                 )
                 _LOG.info(
                     "TAKE depth freshness REST_ms=%d corroborated_stream_ms=%d "

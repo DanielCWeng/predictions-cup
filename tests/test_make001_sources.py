@@ -824,7 +824,7 @@ def test_polymarket_service_seeds_all_outcome_tokens_not_only_aligned_fv_token()
     assert tokens == ("no-token", "yes-token")
 
 
-def test_corrob_stream_depth_requires_fresh_feed_matching_scalar_and_unexpired_book():
+def test_corrob_stream_depth_requires_fresh_feed_matching_scalar_and_unexpired_book() -> None:
     wall_now = datetime(2026, 10, 26, 18, 0, tzinfo=UTC)
     book_at = wall_now - timedelta(seconds=4)
     scalar_at = wall_now - timedelta(milliseconds=500)
@@ -853,7 +853,7 @@ def test_corrob_stream_depth_requires_fresh_feed_matching_scalar_and_unexpired_b
             tournament_id="t1", last_accepted_observed_at=scalar_at,
             portfolio=RuntimePortfolio(account_trusted=True)),
         polymarket_books=_PmBooks({"yes-token": _pm_snapshot(scalar_at)}))
-    def snapshot(at=wall_now):
+    def snapshot(at: datetime = wall_now) -> MakerMarketSnapshot:
         return bridge.build("36", wall_now=at, monotonic_now_ns=20_000_000_000,
                             polymarket_feed_trusted=True)
     good = snapshot()
