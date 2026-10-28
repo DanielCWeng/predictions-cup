@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import re
 from collections.abc import Awaitable, Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -59,7 +60,8 @@ def select_watchlist(
             raise ValueError("invalid market mapping entry")
         title = item.get("sig_market_title", "")
         if not isinstance(title, str) or not any(
-            f"{race.lower()} senate" in title.lower() for race in races
+            re.search(rf"\\b{re.escape(race)} senate\\b", title, re.IGNORECASE)
+            for race in races
         ):
             continue
         eid, mid = item.get("sig_exchange_id"), item.get("sig_market_id")
