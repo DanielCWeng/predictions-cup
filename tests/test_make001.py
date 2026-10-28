@@ -3353,3 +3353,24 @@ def test_rotation_mapping_requires_verified_exact_same_contract() -> None:
     assert rotation_mapped_token(
         exact.model_copy(update={"status": MappingStatus.REVIEW_REQUIRED})
     ) is None
+
+
+def test_pending_rotation_capacity_priority_reduces_maker_quotes_then_expires() -> None:
+    engine = _engine()
+    held = _maker_snapshot(signed_inventory=5)
+    assert engine.quote(held).gate.mode is GateMode.NORMAL
+
+    engine.set_rotation_entry_priority(True, observed_ns=NOW, ttl_ns=10)
+    priority = engine.quote(held)
+    assert priority.gate.mode is GateMode.ASK_ONLY
+    assert priority.desired is not None and priority.desired.bid_size == 0
+
+    later = replace(
+        held, now_monotonic_ns=NOW + 11,
+        runtime=replace(held.runtime, observation_monotonic_ns=NOW + 11),
+    )
+    assert engine.quote(later).gate.mode is GateMode.NORMAL
+
+    engine.set_rotation_entry_priority(True, observed_ns=NOW)
+    engine.set_rotation_entry_priority(False, observed_ns=NOW)
+    assert engine.quote(held).gate.mode is GateMode.NORMAL
