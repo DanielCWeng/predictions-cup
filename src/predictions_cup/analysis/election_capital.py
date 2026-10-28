@@ -13,7 +13,6 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
-from pathlib import Path
 
 from predictions_cup.config.settings import AppSettings
 from predictions_cup.sig.client import SigRestClient
