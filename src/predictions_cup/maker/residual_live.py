@@ -1401,35 +1401,35 @@ class ResidualTakerLiveCoordinator:
                 return ()
             levels = book.asks if action is OrderAction.BUY else book.bids
             def reprice(requested_quantity: int) -> TakerEconomics:
-                return evaluate_taker_economics(
-                direction=cast(Direction, signal.direction),
-                levels=levels,
-                conservative_fair=fair_bound,
-                desired_quantity=requested_quantity,
-                trusted_depth=bool(snapshot.sig_depth_trusted and book.trusted_depth),
-                book_age_ns=(
-                    -1
-                    if snapshot.sig_depth_observed_ns is None
-                    else snapshot.now_monotonic_ns - snapshot.sig_depth_observed_ns
-                ),
-                reference_age_ns=snapshot.now_monotonic_ns - external.observed_monotonic_ns,
-                max_book_age_ns=depth_age_limit_ns,
-                max_reference_age_ns=self._max_fair_age_ns,
-                fee_per_share=self._fee_per_share,
-                latency_haircut=self._latency_haircut,
-                adverse_selection_haircut=self._adverse_haircut,
-                min_net_edge_per_share=self._min_net_edge,
-                available_cash=(
-                    None
-                    if snapshot.runtime.portfolio.account_proxy_cash_balance is None
-                    else float(snapshot.runtime.portfolio.account_proxy_cash_balance)
-                ),
-                reducible_inventory_shares=reducible,
-                maker_price_ticks=(
-                    book.bids[0].price_ticks
-                    if action is OrderAction.BUY
-                    else book.asks[0].price_ticks
-                ),
+                    return evaluate_taker_economics(
+                    direction=cast(Direction, signal.direction),
+                    levels=levels,
+                    conservative_fair=fair_bound,
+                    desired_quantity=requested_quantity,
+                    trusted_depth=bool(snapshot.sig_depth_trusted and book.trusted_depth),
+                    book_age_ns=(
+                        -1
+                        if snapshot.sig_depth_observed_ns is None
+                        else snapshot.now_monotonic_ns - snapshot.sig_depth_observed_ns
+                    ),
+                    reference_age_ns=snapshot.now_monotonic_ns - external.observed_monotonic_ns,
+                    max_book_age_ns=depth_age_limit_ns,
+                    max_reference_age_ns=self._max_fair_age_ns,
+                    fee_per_share=self._fee_per_share,
+                    latency_haircut=self._latency_haircut,
+                    adverse_selection_haircut=self._adverse_haircut,
+                    min_net_edge_per_share=self._min_net_edge,
+                    available_cash=(
+                        None
+                        if snapshot.runtime.portfolio.account_proxy_cash_balance is None
+                        else float(snapshot.runtime.portfolio.account_proxy_cash_balance)
+                    ),
+                    reducible_inventory_shares=reducible,
+                    maker_price_ticks=(
+                        book.bids[0].price_ticks
+                        if action is OrderAction.BUY
+                        else book.asks[0].price_ticks
+                    ),
             )
             economics = reprice(quantity)
             # Polymarket is our probability reference, not an unlimited
