@@ -134,7 +134,7 @@ class AppSettings(BaseSettings):
     rotation_active_exits_enabled: bool = True
     # Separate aggressive rotation capacity from ordinary residual taker size.
     # The risk engine independently limits every placement at dispatch.
-    rotation_max_trade_shares: int = Field(default=500, gt=0, le=2500)
+    rotation_max_trade_shares: int = Field(default=500, gt=0, le=2_147_483_647)
     rotation_min_total_gain: float = Field(default=1.0, ge=0.0)
     residual_taker_size: int = Field(default=50, gt=0, le=2_147_483_647)
     residual_taker_exchange_ids: str = ""

@@ -162,6 +162,7 @@ class ResidualTakerLiveCoordinator:
         active_rotation_exits: bool = False,
         request_rotation_recheck: Callable[[frozenset[str]], None] | None = None,
         rotation_capacity_priority: Callable[[bool, int], None] | None = None,
+        rotation_capacity_priority_enabled: bool = True,
     ) -> None:
         if not tracked_exchange_ids:
             raise ValueError("LIVE residual taker requires an explicit universe")
@@ -212,6 +213,7 @@ class ResidualTakerLiveCoordinator:
         self._rotation_pending_entries: dict[str, _PendingRotationEntry] = {}
         self._rotation_last_entry_request_ns: dict[str, int] = {}
         self._rotation_capacity_priority = rotation_capacity_priority
+        self._rotation_capacity_priority_enabled = rotation_capacity_priority_enabled
         self._rotation_priority_published = False
         self._rotation_evidence = RotationEvidenceCache()
         self._rotation_last_rank_ns = 0
@@ -323,9 +325,13 @@ class ResidualTakerLiveCoordinator:
 
     def _publish_rotation_priority(self, now_ns: int) -> bool:
         """Prefer the planned replacement for a short window after an exit."""
-        active = self._active_rotation_exits and any(
-            0 <= now_ns - entry.created_ns < 180_000_000_000
-            for entry in self._rotation_pending_entries.values()
+        active = (
+            self._rotation_capacity_priority_enabled
+            and self._active_rotation_exits
+            and any(
+                0 <= now_ns - entry.created_ns < 180_000_000_000
+                for entry in self._rotation_pending_entries.values()
+            )
         )
         if active != self._rotation_priority_published:
             self._rotation_priority_published = active

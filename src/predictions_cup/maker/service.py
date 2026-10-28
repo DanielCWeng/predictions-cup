@@ -917,6 +917,9 @@ class MakerService:
                         else None
                     ),
                     active_rotation_exits=self.settings.rotation_active_exits_enabled,
+                    rotation_capacity_priority_enabled=(
+                        self.settings.maker_capital_headroom_shares > 0
+                    ),
                     rotation_capacity_priority=(
                         lambda active, observed_ns: self.core.engine.set_rotation_entry_priority(
                             active, observed_ns=observed_ns,
