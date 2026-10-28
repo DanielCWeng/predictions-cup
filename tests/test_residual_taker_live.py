@@ -1041,3 +1041,46 @@ def test_rotation_capital_redirect_requires_higher_executable_ev() -> None:
     assert check(net_per_share=.054, quantity=50, now_ns=NOW) is None
     assert check(net_per_share=.056, quantity=50, now_ns=NOW) == "target"
     assert check(net_per_share=None, quantity=50, now_ns=NOW) is None
+
+
+def test_capital_headroom_clips_to_remaining_gross_and_market_capacity() -> None:
+    harness = _Harness()
+    snapshot = _snapshot()
+    held = RuntimePortfolio(
+        positions=(
+            RuntimePosition(EXCHANGE, MARKET, TOURNAMENT, 50, 50),
+        ),
+        orders=(), account_trusted=True,
+    )
+    snapshot = replace(snapshot, runtime=replace(snapshot.runtime, portfolio=held))
+    base = _risk()
+    assert base.limits is not None
+    limits = replace(
+        base.limits,
+        max_gross_exposure=70.0,
+        max_per_market_exposure=55.0,
+    )
+    context = replace(base, limits=limits)
+    assert harness.coordinator._capital_headroom_quantity(snapshot, context, 50) == 5
+    assert harness.coordinator._capital_headroom_quantity(snapshot, context, 3) == 3
+
+
+def test_capital_headroom_respects_tournament_capacity() -> None:
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.risk.capital import CapitalRiskState
+
+    harness = _Harness()
+    snapshot = _snapshot()
+    base = _risk()
+    assert base.limits is not None
+    limits = replace(
+        base.limits,
+        max_tournament_exposure=100.0,
+    )
+    capital = cast(CapitalRiskState, SimpleNamespace(
+        exposure=SimpleNamespace(tournament=lambda _tournament: 96.0),
+    ))
+    context = replace(base, limits=limits, capital_state=capital)
+    assert harness.coordinator._capital_headroom_quantity(snapshot, context, 50) == 4
