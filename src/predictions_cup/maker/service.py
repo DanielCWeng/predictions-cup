@@ -895,7 +895,8 @@ class MakerService:
                     allow_bbo_proxy=self.settings.account_proxy_enabled,
                     max_sig_bbo_age_ns=(self.settings.maker_max_bbo_age_ms * 1_000_000),
                     rotation_allocator=LiquidityWeightedAllocator(
-                        max_trade_shares=self.settings.residual_taker_size,
+                        max_trade_shares=self.settings.rotation_max_trade_shares,
+                        min_rotation_gain=self.settings.rotation_min_total_gain,
                         max_position=self.settings.residual_taker_max_position,
                         max_age_ns=self.settings.residual_taker_max_fair_age_ms * 1_000_000,
                         max_exit_book_age_ns=(
