@@ -126,6 +126,12 @@ class AppSettings(BaseSettings):
     # attribution. It is opt-in and constrained to the explicit live universe.
     residual_taker_enabled: bool = False
     residual_taker_shadow_only: bool = True
+    # Optional PASSIVE capital recycling: allocator-nominated holdings become
+    # reduce-only on the existing maker. Does not enable two-leg taker orders.
+    rotation_passive_recycling_enabled: bool = False
+    # Execute independently risk-approved, economically positive reducing
+    # exits and release capital for later independently priced entries.
+    rotation_active_exits_enabled: bool = True
     residual_taker_size: int = Field(default=50, gt=0, le=2_147_483_647)
     residual_taker_exchange_ids: str = ""
     residual_taker_max_pm_book_age_ms: int = Field(default=35_000, gt=0)
@@ -141,6 +147,10 @@ class AppSettings(BaseSettings):
     residual_taker_latency_haircut: float = Field(default=0.005, ge=0.0, le=1.0)
     residual_taker_adverse_haircut: float = Field(default=0.005, ge=0.0, le=1.0)
     residual_taker_max_sig_depth_age_ms: int = Field(default=1500, gt=0)
+    # Only a versioned streamed full book independently corroborated by the
+    # newer scalar BBO and live WS continuity may use this extended window.
+    # REST books and all uncorroborated depth retain the 1.5s default.
+    residual_taker_max_sig_stream_depth_age_ms: int = Field(default=15000, gt=0, le=30000)
     residual_taker_max_fair_age_ms: int = Field(default=5000, gt=0)
 
     # SHADOW-002 is disabled by default and has no order-write capability.

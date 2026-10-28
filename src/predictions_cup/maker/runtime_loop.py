@@ -30,6 +30,9 @@ ExecutionObserver = Callable[
     [MakerStateChange, datetime, Mapping[str, MakerMarketSnapshot]],
     Awaitable[None],
 ]
+# Prevent a continuous external-price burst from starving inventory, safety
+# and quote-maintenance work when LIVE processes one exchange per cycle.
+_MAX_CONSECUTIVE_PM_PRIORITY_CYCLES = 4
 
 
 class MakerRuntimeLoop:
@@ -71,6 +74,8 @@ class MakerRuntimeLoop:
         self._blocked_exchange_ids: frozenset[str] = frozenset()
         self._wake = asyncio.Event()
         self._pending_exchanges: set[str] = set()
+        self._priority_pm_exchanges: set[str] = set()
+        self._consecutive_pm_priority_cycles = 0
         self._global_recheck = False
         self._oldest_observed_ns: int | None = None
         self._freshness_deadlines: dict[str, int] = {}
@@ -93,6 +98,12 @@ class MakerRuntimeLoop:
         affected: set[str] = set()
         for token_id in token_ids:
             affected.update(self._bridge.sig_exchanges_for_polymarket_token(token_id))
+        # Price shocks and routine PM updates use the same fully gated
+        # taker/maker decision path. Only queue ordering changes: an external
+        # repricing should not sit behind an old, sorted-ID deadline backlog.
+        self._priority_pm_exchanges.update(
+            affected.intersection(self._bridge.tradeable_exchange_ids)
+        )
         self._notify_exchanges(affected, observed_monotonic_ns)
 
     def notify_account(
@@ -169,11 +180,43 @@ class MakerRuntimeLoop:
         if "*" in self._blocked_exchange_ids:
             return None
         exchange_ids = frozenset(exchange_ids).difference(self._blocked_exchange_ids)
+        # Blocked exchanges may never retain priority across later recovery.
+        self._priority_pm_exchanges.difference_update(self._blocked_exchange_ids)
         if not exchange_ids:
             return None
 
-        ordered_exchange_ids = tuple(sorted(exchange_ids))
         limit = self._max_exchanges_per_cycle
+        priority = self._priority_pm_exchanges.intersection(exchange_ids)
+        # A global safety/account recheck gets its first normal turn. For
+        # ordinary paced backlogs prioritize recent external-price updates,
+        # but force one normal turn after every four priority cycles.
+        use_priority = bool(
+            limit is not None
+            and not global_recheck
+            and priority
+            and self._consecutive_pm_priority_cycles
+                < _MAX_CONSECUTIVE_PM_PRIORITY_CYCLES
+        )
+        nonpriority = exchange_ids.difference(priority)
+        if use_priority:
+            ordered_exchange_ids = (
+                tuple(sorted(priority)) + tuple(sorted(nonpriority))
+            )
+        elif (
+            limit is not None
+            and not global_recheck
+            and priority
+            and nonpriority
+            and self._consecutive_pm_priority_cycles
+                >= _MAX_CONSECUTIVE_PM_PRIORITY_CYCLES
+        ):
+            # Fairness is real, not alphabetic: give an older ordinary
+            # exchange its next turn even if the PM exchange sorts first.
+            ordered_exchange_ids = (
+                tuple(sorted(nonpriority)) + tuple(sorted(priority))
+            )
+        else:
+            ordered_exchange_ids = tuple(sorted(exchange_ids))
         if limit is not None and len(ordered_exchange_ids) > limit:
             selected = ordered_exchange_ids[:limit]
             deferred = ordered_exchange_ids[limit:]
@@ -182,6 +225,14 @@ class MakerRuntimeLoop:
             self._wake.set()
         else:
             exchange_ids = frozenset(ordered_exchange_ids)
+        # Consume before awaiting the coordinator. A new PM update arriving
+        # during a slow order/cancel must retain its new priority.
+        self._priority_pm_exchanges.difference_update(exchange_ids)
+        if use_priority and exchange_ids.intersection(priority):
+            self._consecutive_pm_priority_cycles += 1
+            self._increment("maker_pm_priority_cycles")
+        else:
+            self._consecutive_pm_priority_cycles = 0
 
         now_ns = self._mono_clock()
         if oldest_observed_ns is not None and now_ns >= oldest_observed_ns:

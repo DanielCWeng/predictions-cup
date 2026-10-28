@@ -268,6 +268,47 @@ class MakerSourceBridge:
             observation_monotonic_ns=monotonic_now_ns,
         )
         sig_connected = self._sig.health.connected
+        # A complete, versioned WS ladder is authoritative without waiting
+        # for a slower REST scalar poll. If a NEWER scalar disagrees, the
+        # _runtime_book selector already rejects the full ladder. Never let
+        # an OLDER REST price prevent a newer WS book being executable.
+        # Keep recent WS liveness and all original dirty/trade/expiry fences.
+        stream_last_valid = self._sig.health.last_valid_batch
+        stream_health_age = (
+            None if stream_last_valid is None
+            else (wall_now - stream_last_valid).total_seconds()
+        )
+        stream_depth_corroborated = bool(
+            sig_connected
+            and depth_trusted
+            and runtime_book.trusted_depth
+            and sig_exchange is not None
+            and sig_exchange.orderbook is not None
+            and sig_exchange.orderbook.source == "sig-realtime"
+            and bool(sig_exchange.orderbook.bids)
+            and bool(sig_exchange.orderbook.asks)
+            # The stream book must cover the latest realtime exchange touch.
+            # A later trade, gap or dirty normally revokes state.trusted;
+            # check this independently so a stale depth cannot slip through.
+            and (
+                sig_exchange.last_realtime_observed_at is None
+                or sig_exchange.last_realtime_observed_at
+                <= sig_exchange.orderbook.timestamp
+            )
+            # A newer scalar snapshot is an independent VETO on disagreement,
+            # never a prerequisite for trusting the newer full WS ladder.
+            and (
+                sig_exchange.last_scalar_observed_at is None
+                or sig_exchange.last_scalar_observed_at
+                <= sig_exchange.orderbook.timestamp
+                or (
+                    sig_exchange.scalar_best_bid == sig_exchange.orderbook.bids[0].price
+                    and sig_exchange.scalar_best_ask == sig_exchange.orderbook.asks[0].price
+                )
+            )
+            and stream_health_age is not None
+            and 0 <= stream_health_age <= 5.0
+        )
         return MakerMarketSnapshot(
             runtime=runtime,
             exchange_id=exchange_id,
@@ -278,6 +319,7 @@ class MakerSourceBridge:
             sig_bbo_trusted=bbo_trusted and sig_connected,
             sig_depth_observed_ns=depth_observed_ns,
             sig_depth_trusted=depth_trusted and sig_connected,
+            sig_stream_depth_corroborated=stream_depth_corroborated,
             account_observed_ns=account_observed_ns,
             inventory_observed_ns=account_observed_ns,
             external_quotes=external_quotes,
@@ -332,7 +374,11 @@ class MakerSourceBridge:
         tournament_id = state.tournament_id
         trusted_depth = state.trusted
         orderbook = state.orderbook
-        last_rest = state.last_rest_observed_at
+        last_rest = (
+            orderbook.timestamp
+            if orderbook is not None and orderbook.source == "sig-realtime"
+            else state.last_rest_observed_at
+        )
         last_scalar = state.last_scalar_observed_at
         last_realtime = state.last_realtime_observed_at
         depth_observed_ns = self._to_monotonic(
@@ -348,10 +394,14 @@ class MakerSourceBridge:
         depth_trusted_now = (
             trusted_depth
             and orderbook is not None
+            # Resting orders can expire without a WS notification. The
+            # maintenance grace is for reconciliation, NOT trading.
+            and (state.next_expiry_at is None or wall_now < state.next_expiry_at)
         )
-        depth_current = depth_trusted_now and last_rest is not None and (
-            last_realtime is None or last_rest >= last_realtime
-        )
+        # Trust is invalidated by the state engine on a real dirty/trade/gap.
+        # A newer scalar or market heartbeat alone does NOT invalidate depth.
+        # Scalar BBO disagreement below still rejects the complete ladder.
+        depth_current = depth_trusted_now and last_rest is not None
         scalar_current = last_scalar is not None and (
             last_realtime is None or last_scalar >= last_realtime
         )
@@ -376,6 +426,11 @@ class MakerSourceBridge:
                 and orderbook is not None
                 and bool(orderbook.bids)
                 and bool(orderbook.asks)
+                # A realtime touch after the full book can change size
+                # without changing BBO. A matching later scalar price
+                # cannot reauthorise the old ladder's quantities.
+                and last_rest is not None
+                and (last_realtime is None or last_rest >= last_realtime)
                 and best_bid == orderbook.bids[0].price
                 and best_ask == orderbook.asks[0].price
             )
@@ -427,7 +482,8 @@ class MakerSourceBridge:
                     observed_monotonic_ns=observed_ns,
                 ),
                 observed_ns,
-                depth_current and bool(bids) and bool(asks),
+                depth_current and bool(bids) and bool(asks)
+                and (last_realtime is None or last_rest >= last_realtime),
                 observed_ns,
                 depth_trusted_now,
             )

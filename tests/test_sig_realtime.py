@@ -2017,3 +2017,67 @@ def test_lane5_depth_capture_rejects_rest_identity_mismatch(tmp_path: Path) -> N
             recorder.close()
 
     asyncio.run(scenario())
+
+@pytest.mark.parametrize("count", [8, 62])
+def test_market_resync_burst_has_two_network_workers_and_keeps_books_untrusted(
+    tmp_path: Path, count: int,
+) -> None:
+    async def scenario() -> None:
+        rest = FakeRest(market_count=count)
+        tracked = {f"e-{i}" for i in range(count)}
+        engine, recorder = _engine(tmp_path, rest, tracked=tracked, max_age=180.0)
+        await engine.initialize()
+        active = 0
+        maximum = 0
+        started = asyncio.Event()
+        release = asyncio.Event()
+        observed_priority: list[RestPriority] = []
+        original = rest.get_market
+
+        async def blocked_market(
+            market_id: str, *, tournament_id: str | None = None
+        ) -> MarketDto:
+            nonlocal active, maximum
+            observed_priority.append(rest._priority)
+            active += 1
+            maximum = max(maximum, active)
+            started.set()
+            try:
+                await release.wait()
+                return await original(market_id, tournament_id=tournament_id)
+            finally:
+                active -= 1
+
+        rest.get_market = blocked_market  # type: ignore[method-assign]
+        try:
+            for i in range(count):
+                engine._schedule_market_resync(
+                    f"m-{i}",
+                    transition=TrustTransition.UNTRUSTED_REVISION_GAP,
+                    reason="test_burst",
+                    triggering_revision=i + 10,
+                )
+            await asyncio.wait_for(started.wait(), timeout=2)
+            await asyncio.sleep(.05)
+            assert active == 2
+            assert maximum == 2
+            assert len(engine._market_resync_tasks) == count
+            assert observed_priority == [RestPriority.NORMAL] * 2
+            assert all(
+                not engine.states[f"e-{i}"].trusted for i in range(count)
+            )
+        finally:
+            release.set()
+            await asyncio.wait_for(
+                asyncio.gather(*tuple(engine._market_resync_tasks.values())),
+                timeout=8,
+            )
+            await engine.aclose()
+            recorder.close()
+        assert maximum <= 2
+        assert all(engine.states[f"e-{i}"].trusted for i in range(count))
+        # FakeRest's priority flag is instance-global (unlike the production
+        # ContextVar), so concurrent test requests may inherit NORMAL.
+        assert RestPriority.HIGH not in rest.orderbook_priorities
+
+    asyncio.run(scenario())

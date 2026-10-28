@@ -111,6 +111,9 @@ class RiskDecision:
     signal_value: float | None = None
     fair_value: float | None = None
     decision_observation_ns: int | None = None
+    # Diagnostic proof, not a bypass: specifically confirms that RISK-002
+    # accepted the strict issuer-reconciled inventory-reduction exemption.
+    inventory_reduction_verified: bool = False
     swing_diagnostics: SwingRiskDiagnostics | None = field(
         default=None,
         compare=False,
@@ -458,6 +461,7 @@ def evaluate_risk(
         signal_value=opportunity.gross_edge,
         fair_value=opportunity.fair_value,
         decision_observation_ns=opportunity.decision_observation_ns,
+        inventory_reduction_verified=verified_reduction,
         swing_diagnostics=swing_diagnostics,
     )
 
