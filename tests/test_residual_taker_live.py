@@ -1104,6 +1104,7 @@ def test_rotation_priority_remains_active_after_old_75_second_expiry() -> None:
 def test_live_take_uses_only_displayed_polymarket_reference_depth() -> None:
     harness = _Harness(economics_gate_enabled=True)
     harness.coordinator._signal.size = 150
+    harness.coordinator._signal.min_pm_depth = 0
     snapshot = _snapshot(ask_qty=150)
     quote = snapshot.external_quotes[TOKEN]
     snapshot = replace(snapshot, external_quotes={
