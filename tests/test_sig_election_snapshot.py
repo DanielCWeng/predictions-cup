@@ -11,11 +11,11 @@ from types import SimpleNamespace
 from typing import cast
 
 import pytest
-from scripts.ops.sig_election_snapshot import (
+
+from predictions_cup.analysis.election_sig_read import (
     capture_election_sig_snapshot,
     select_watchlist,
 )
-
 from predictions_cup.sig.dto import AccountDto, OrderBookSnapshotDto
 from predictions_cup.sig.trading_dto import OrderReadDto, PositionsResponseDto
 
@@ -118,6 +118,9 @@ def test_readonly_capture_preserves_signed_position_and_raw_cash() -> None:
     assert books[0]["held_yes_shares"] == "0"
     assert books[1]["held_yes_shares"] == "8"
     assert books[0]["asks"] == [{"price": "0.60", "quantity": "20"}]
+    assert books[0]["election_rule_caution"] == (
+        "MAINE_SENATE_RANKED_CHOICE_FIRST_ROUND_NOT_TERMINAL"
+    )
     assert "non-atomic" in str(result["warning"]).lower()
 
 
