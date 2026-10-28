@@ -30,6 +30,7 @@ class OrderNotional:
     open_orders: int
     unfilled_shares: str
     indicative_buy_notional: str
+    buy_notional_upper_bound: str
     missing_fill_counts: int
     missing_price_limits: int
 
@@ -38,6 +39,7 @@ def summarize_open_orders(orders: tuple[OrderReadDto, ...]) -> tuple[OrderNotion
     groups: dict[tuple[str, str, str], dict[str, Decimal | int]] = defaultdict(
         lambda: {
             "count": 0, "shares": ZERO, "buy_notional": ZERO,
+            "buy_upper": ZERO,
             "missing_fills": 0, "missing_prices": 0,
         }
     )
@@ -51,6 +53,8 @@ def summarize_open_orders(orders: tuple[OrderReadDto, ...]) -> tuple[OrderNotion
         row["count"] += 1
         if order.quantity_filled is None:
             row["missing_fills"] += 1
+            if order.action == "buy" and order.price_limit is not None:
+                row["buy_upper"] += order.quantity * order.price_limit
             # Do not claim these shares are unfilled or unencumbered.
             continue
         if not ZERO <= order.quantity_filled <= order.quantity:
@@ -62,12 +66,14 @@ def summarize_open_orders(orders: tuple[OrderReadDto, ...]) -> tuple[OrderNotion
                 row["missing_prices"] += 1
             else:
                 row["buy_notional"] += outstanding * order.price_limit
+                row["buy_upper"] += outstanding * order.price_limit
     return tuple(
         OrderNotional(
             exchange_id=eid, side=side, action=action,
             open_orders=int(row["count"]),
             unfilled_shares=str(row["shares"]),
             indicative_buy_notional=str(row["buy_notional"]),
+            buy_notional_upper_bound=str(row["buy_upper"]),
             missing_fill_counts=int(row["missing_fills"]),
             missing_price_limits=int(row["missing_prices"]),
         )
@@ -103,6 +109,9 @@ async def scan_orders(*, limit: int = 2000) -> dict[str, object]:
         "open_orders": sum(x.open_orders for x in rows),
         "indicative_open_buy_notional": str(sum(
             (Decimal(x.indicative_buy_notional) for x in rows), ZERO
+        )),
+        "open_buy_notional_upper_bound": str(sum(
+            (Decimal(x.buy_notional_upper_bound) for x in rows), ZERO
         )),
         "missing_fill_counts": sum(x.missing_fill_counts for x in rows),
         "missing_price_limits": sum(x.missing_price_limits for x in rows),
