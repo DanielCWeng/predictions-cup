@@ -150,6 +150,7 @@ class OrderReadDto(TransportModel):
     side: OrderOutcomeSide
     action: OrderAction
     quantity: WireDecimal
+    quantity_filled: WireDecimal | None = Field(default=None, alias="quantityFilled")
     price_limit: WireProbability | None = Field(alias="priceLimit")
     open: bool
     created_at: WireDateTime = Field(alias="createdAt")
