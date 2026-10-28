@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import Any, cast
 
 import pytest
 
@@ -26,11 +27,15 @@ from predictions_cup.runtime.models import (
 )
 
 
-def snapshot(*, eid="11", market="m11", signed=0, yes_bid=100,
-             yes_ask=104, pm_bid=.58, pm_ask=.60, now=30_000_000_000,
-             depth_age_ms=5, pm_age_ms=5, trust=True, open_order=False,
-             proxy=False, bid_depth=500, ask_depth=500,
-             all_positions=None):
+def snapshot(
+    *, eid: str = "11", market: str = "m11", signed: int = 0,
+    yes_bid: int = 100, yes_ask: int = 104, pm_bid: float = .58,
+    pm_ask: float = .60, now: int = 30_000_000_000,
+    depth_age_ms: int = 5, pm_age_ms: int = 5, trust: bool = True,
+    open_order: bool = False, proxy: bool = False,
+    bid_depth: int = 500, ask_depth: int = 500,
+    all_positions: tuple[RuntimePosition, ...] | None = None,
+) -> MakerMarketSnapshot:
     positions = (
         (() if not signed else (RuntimePosition(eid, market, "t1", abs(signed), signed),))
         if all_positions is None else all_positions
@@ -67,7 +72,7 @@ def snapshot(*, eid="11", market="m11", signed=0, yes_bid=100,
     )
 
 
-def test_entry_uses_executable_depth_and_not_midpoint():
+def test_entry_uses_executable_depth_and_not_midpoint() -> None:
     a = LiquidityWeightedAllocator()
     a.observe(snapshot(eid="11", pm_bid=.60, pm_ask=.62, yes_ask=106), "token-11")
     assert a.entries["11"].direction == "BUY"
@@ -76,7 +81,7 @@ def test_entry_uses_executable_depth_and_not_midpoint():
     assert a.entries["11"].net_ev(500) == pytest.approx(30)
 
 
-def test_signed_no_exit_and_ranked_rotation_costs():
+def test_signed_no_exit_and_ranked_rotation_costs() -> None:
     a = LiquidityWeightedAllocator(min_rotation_gain=0)
     holdings = (RuntimePosition("11", "m11", "t1", 500, -500),)
     a.observe(snapshot(eid="11", market="m11", signed=-500,
@@ -100,7 +105,7 @@ def test_signed_no_exit_and_ranked_rotation_costs():
     assert item.gain_susq == pytest.approx(10.0)
 
 
-def test_ranking_picks_deeper_opportunity_over_flashy_touch():
+def test_ranking_picks_deeper_opportunity_over_flashy_touch() -> None:
     a=LiquidityWeightedAllocator(min_rotation_gain=0)
     a.exits["1"] = RankedExit("1","m1",500,.6,100,
                              (BookLevel(.60,500),),(BookLevel(.62,500),))
@@ -113,7 +118,7 @@ def test_ranking_picks_deeper_opportunity_over_flashy_touch():
     assert best[0].gain_susq == pytest.approx(20.0)
 
 
-def test_marginal_edge_is_not_assumed_constant_across_depth():
+def test_marginal_edge_is_not_assumed_constant_across_depth() -> None:
     entry=RankedEntry("22","m2","BUY",100,
                       (EntryTier(100,.10),EntryTier(150,.04)))
     assert entry.net_ev(100)==pytest.approx(10)
@@ -126,16 +131,18 @@ def test_marginal_edge_is_not_assumed_constant_across_depth():
     {"trust":False}, {"proxy":True}, {"open_order":True},
     {"depth_age_ms":20_000}, {"pm_age_ms":7000},
 ])
-def test_untrusted_proxy_outstanding_and_stale_books_excluded(override):
+def test_untrusted_proxy_outstanding_and_stale_books_excluded(
+    override: dict[str, object],
+) -> None:
     a=LiquidityWeightedAllocator()
     args=dict(eid="11",signed=500,yes_bid=100,pm_bid=.45,pm_ask=.47)
     args.update(override)
-    a.observe(snapshot(**args),"token-11")
+    a.observe(snapshot(**cast(Any, args)), "token-11")
     assert a.exits=={}
     assert a.entries=={}
 
 
-def test_expiry_and_conflicting_same_market_not_rotated():
+def test_expiry_and_conflicting_same_market_not_rotated() -> None:
     a=LiquidityWeightedAllocator(max_age_ns=500, min_rotation_gain=0)
     a.exits["1"]=RankedExit("1","race",500,.6,100,
                            (BookLevel(.6,500),),(BookLevel(.7,500),))
@@ -145,7 +152,7 @@ def test_expiry_and_conflicting_same_market_not_rotated():
     assert a.rank(now_ns=700)==()
 
 
-def test_respects_depth_exit_cost_and_fairness_floor():
+def test_respects_depth_exit_cost_and_fairness_floor() -> None:
     a=LiquidityWeightedAllocator(min_rotation_gain=5)
     a.exits["1"]=RankedExit("1","m1",500,.8,100,
                            (BookLevel(.50,500),),(BookLevel(.60,500),))
@@ -153,7 +160,7 @@ def test_respects_depth_exit_cost_and_fairness_floor():
     assert a.rank(now_ns=100)==()
 
 
-def test_internal_cache_invalidates_old_market_on_new_untrusted_event():
+def test_internal_cache_invalidates_old_market_on_new_untrusted_event() -> None:
     a=LiquidityWeightedAllocator()
     a.observe(snapshot(eid="11"),"token-11")
     assert "11" in a.entries
@@ -161,7 +168,7 @@ def test_internal_cache_invalidates_old_market_on_new_untrusted_event():
     assert "11" not in a.entries
 
 
-def test_risk_reconciliation_loss_clears_cross_market_cache():
+def test_risk_reconciliation_loss_clears_cross_market_cache() -> None:
     a=LiquidityWeightedAllocator()
     holdings=(RuntimePosition("11","m11","t1",500,-500),)
     a.observe(snapshot(eid="11", signed=-500, all_positions=holdings,
@@ -172,7 +179,7 @@ def test_risk_reconciliation_loss_clears_cross_market_cache():
     assert not a.exits and not a.entries
 
 
-def test_signed_fill_invalidates_previous_rotation_candidates():
+def test_signed_fill_invalidates_previous_rotation_candidates() -> None:
     a=LiquidityWeightedAllocator()
     holdings=(RuntimePosition("11","m11","t1",500,-500),)
     a.observe(snapshot(eid="11",signed=-500,all_positions=holdings,
@@ -183,7 +190,7 @@ def test_signed_fill_invalidates_previous_rotation_candidates():
     assert "11" not in a.exits
 
 
-def test_directional_position_cap_limits_entry_size():
+def test_directional_position_cap_limits_entry_size() -> None:
     a=LiquidityWeightedAllocator(max_position=650)
     s=snapshot(eid="11",signed=500,pm_bid=.8,pm_ask=.82,yes_ask=106)
     a.observe(s,"token-11")
