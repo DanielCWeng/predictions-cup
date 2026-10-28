@@ -54,9 +54,9 @@ from predictions_cup.maker.adapters import (
     LiveMakerExecutionAdapter,
     ShadowMakerExecutionAdapter,
 )
-from predictions_cup.maker.depth_priority import CandidateDepthQueue
 from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.coordinator import MakerCoordinator, MakerStateChange
+from predictions_cup.maker.depth_priority import CandidateDepthQueue
 from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
 from predictions_cup.maker.instance_lock import MakerInstanceLock
 from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator

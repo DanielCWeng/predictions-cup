@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+
 @dataclass(frozen=True, slots=True)
 class DepthCandidate:
     exchange_id: str

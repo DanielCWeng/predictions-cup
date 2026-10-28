@@ -721,7 +721,7 @@ def test_rotation_exit_reuses_build009_and_requires_risk_proof(
         runtime=replace(original.runtime, portfolio=portfolio),
     )
 
-    def admission(opportunity: "Opportunity", *_args: object) -> RiskDecision:
+    def admission(opportunity: Opportunity, *_args: object) -> RiskDecision:
         assert opportunity.strategy_id == "rotation-exit-v1"
         (leg,) = opportunity.legs
         assert leg.action is OrderAction.SELL

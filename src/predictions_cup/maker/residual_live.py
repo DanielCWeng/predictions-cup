@@ -28,7 +28,10 @@ from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.maker.capital_rotation import (
-    HeldPosition, Replacement, RotationConditions, assess_rotation,
+    HeldPosition,
+    Replacement,
+    RotationConditions,
+    assess_rotation,
 )
 from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.coordinator import MakerStateChange
@@ -49,11 +52,18 @@ from predictions_cup.maker.rotation_recovery import RotationEvidence, RotationEv
 from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.maker.taker_economics import evaluate_taker_economics
 from predictions_cup.mapping.models import (
-    MappingClass, MappingDirection, MappingDocument, MappingStatus, MarketMapping,
+    MappingClass,
+    MappingDirection,
+    MappingDocument,
+    MappingStatus,
+    MarketMapping,
 )
 from predictions_cup.risk.core import RiskContext, evaluate_risk
 from predictions_cup.runtime.models import (
-    AccountTrustGrade, OrderAction, OutcomeSide, RuntimePortfolio,
+    AccountTrustGrade,
+    OrderAction,
+    OutcomeSide,
+    RuntimePortfolio,
 )
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
