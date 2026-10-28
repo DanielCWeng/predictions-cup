@@ -29,7 +29,10 @@ def fill_envelope(
         "orderId": order_id, "exchangeId": exchange_id,
         "tournamentId": "synthetic-test",
         "data": [],
-        "pagination": {"limit": 200, "hasMore": has_more, "nextCursor": "next" if has_more else None},
+        "pagination": {
+            "limit": 200, "hasMore": has_more,
+            "nextCursor": "next" if has_more else None,
+        },
         "coverage": {"complete": complete, "projectedThroughSequence": 12345},
         "totalQuantityFilled": total_filled,
         "avgFillPrice": None,
