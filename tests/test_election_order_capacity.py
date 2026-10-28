@@ -47,6 +47,7 @@ def test_missing_fill_count_is_not_assumed_zero() -> None:
     assert rows[0].missing_fill_counts == 1
     assert rows[0].unfilled_shares == "0"
     assert rows[0].indicative_buy_notional == "0"
+    assert Decimal(rows[0].buy_notional_upper_bound) == Decimal("150")
 
 
 def test_missing_price_marked_incomplete_and_sells_not_fake_cash() -> None:
