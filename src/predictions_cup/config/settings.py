@@ -129,6 +129,9 @@ class AppSettings(BaseSettings):
     # Optional PASSIVE capital recycling: allocator-nominated holdings become
     # reduce-only on the existing maker. Does not enable two-leg taker orders.
     rotation_passive_recycling_enabled: bool = False
+    # Execute independently risk-approved, economically positive reducing
+    # exits and release capital for later independently priced entries.
+    rotation_active_exits_enabled: bool = True
     residual_taker_size: int = Field(default=50, gt=0, le=2_147_483_647)
     residual_taker_exchange_ids: str = ""
     residual_taker_max_pm_book_age_ms: int = Field(default=35_000, gt=0)

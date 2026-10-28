@@ -27,37 +27,33 @@ from predictions_cup.execution.models import (
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
 from predictions_cup.execution.sinks import ExecutionPlan
+from predictions_cup.maker.capital_rotation import (
+    HeldPosition, Replacement, RotationConditions, assess_rotation,
+)
 from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.lifecycle import QuoteRegistry
-from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
+from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator, RankedRotation
 from predictions_cup.maker.residual_taker import (
     COOLDOWN_NS,
     MIN_PM_DEPTH,
     PM_SPREAD_CAP,
+    SIG_TICK_PROBABILITY,
     STRATEGY_ID,
     THRESHOLD,
     ResidualSignal,
     ResidualTakerSignal,
-    SIG_TICK_PROBABILITY,
     residual_input_from_snapshot,
 )
 from predictions_cup.maker.rotation_recovery import RotationEvidence, RotationEvidenceCache
 from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.maker.taker_economics import evaluate_taker_economics
 from predictions_cup.mapping.models import (
-    MappingClass,
-    MappingDirection,
-    MappingDocument,
-    MappingStatus,
-    MarketMapping,
+    MappingClass, MappingDirection, MappingDocument, MappingStatus, MarketMapping,
 )
 from predictions_cup.risk.core import RiskContext, evaluate_risk
 from predictions_cup.runtime.models import (
-    AccountTrustGrade,
-    OrderAction,
-    OutcomeSide,
-    RuntimePortfolio,
+    AccountTrustGrade, OrderAction, OutcomeSide, RuntimePortfolio,
 )
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
@@ -129,6 +125,8 @@ class ResidualTakerLiveCoordinator:
         request_fresh_depth: Callable[[str, float], None] | None = None,
         rotation_allocator: LiquidityWeightedAllocator | None = None,
         rotation_reduce_only_targets: Callable[[frozenset[str], int], None] | None = None,
+        active_rotation_exits: bool = False,
+        request_rotation_recheck: Callable[[frozenset[str]], None] | None = None,
     ) -> None:
         if not tracked_exchange_ids:
             raise ValueError("LIVE residual taker requires an explicit universe")
@@ -171,6 +169,11 @@ class ResidualTakerLiveCoordinator:
         self._request_fresh_depth = request_fresh_depth
         self._rotation_allocator = rotation_allocator
         self._rotation_reduce_only_targets = rotation_reduce_only_targets
+        self._active_rotation_exits = active_rotation_exits
+        self._request_rotation_recheck = request_rotation_recheck
+        self._rotation_pending: dict[str, tuple[RankedRotation, int]] = {}
+        self._rotation_last_request_ns: dict[str, int] = {}
+        self._rotation_last_exit_ns: dict[str, int] = {}
         self._rotation_evidence = RotationEvidenceCache()
         self._rotation_last_rank_ns = 0
         self._allow_bbo_proxy = allow_bbo_proxy
@@ -263,6 +266,7 @@ class ResidualTakerLiveCoordinator:
         )
         now_ns = snapshot.now_monotonic_ns
         if not trusted or not allocator.entries or not allocator.exits:
+            self._rotation_pending.clear()
             if self._rotation_reduce_only_targets is not None:
                 self._rotation_reduce_only_targets(frozenset(), now_ns)
             return
@@ -270,6 +274,22 @@ class ResidualTakerLiveCoordinator:
             return
         self._rotation_last_rank_ns = now_ns
         ranked = allocator.rank(now_ns=now_ns, limit=3)
+        if self._active_rotation_exits:
+            self._rotation_pending = {
+                item.assessment.exit_exchange_id: (item, now_ns)
+                for item in ranked
+            }
+            if self._request_rotation_recheck is not None:
+                to_recheck = frozenset(
+                    eid for eid in self._rotation_pending
+                    if eid != snapshot.exchange_id
+                    and now_ns - self._rotation_last_request_ns.get(eid, -10_000_000_000)
+                    >= 1_500_000_000
+                )
+                if to_recheck:
+                    for eid in to_recheck:
+                        self._rotation_last_request_ns[eid] = now_ns
+                    self._request_rotation_recheck(to_recheck)
         if self._rotation_reduce_only_targets is not None:
             # A dynamic target only changes which EXISTING maker side may
             # quote. Never treat the shortlist as permission for a taker exit.
@@ -393,6 +413,16 @@ class ResidualTakerLiveCoordinator:
                     risk_state_trusted=risk_ready,
                 )
                 self._capture_rotation(snapshot, risk_ready=risk_ready)
+                pending = self._rotation_pending.get(exchange_id)
+                if self._active_rotation_exits and pending is not None:
+                    proposed, proposed_ns = pending
+                    if 0 <= snapshot.now_monotonic_ns - proposed_ns <= 1_500_000_000:
+                        rotated = await self._execute_rotation_exit(
+                            change, snapshot, proposed
+                        )
+                        if rotated:
+                            events.extend(rotated)
+                            continue
             # Most updates have no executable PM/SIG price residual. Reject
             # that common case using only touch prices, before allocating a
             # signal input or checking ancillary feed/portfolio state. All
@@ -444,6 +474,238 @@ class ResidualTakerLiveCoordinator:
         self._evaluation_cycles += 1
         self._evaluation_changed.set()
         return tuple(events)
+
+    async def _execute_rotation_exit(
+        self,
+        change: MakerStateChange,
+        snapshot: MakerMarketSnapshot,
+        proposed: RankedRotation,
+    ) -> tuple[ExecutionEvent, ...]:
+        """Take a verified reducing exit; leave reinvestment to fresh admission.
+
+        All observed EV is advisory until this fresh RISK-002/BUILD-009 path
+        approves. Any missing journal claim or uncertain order fails closed.
+        No new position is opened from the same stale shortlist.
+        """
+        now = snapshot.now_monotonic_ns
+        eid = snapshot.exchange_id
+        if (
+            self._kill_switch.active
+            or now - self._rotation_last_exit_ns.get(eid, -60_000_000_000)
+            < 30_000_000_000
+            or self._rotation_allocator is None
+        ):
+            return ()
+        # Recompute after the target market's latest observation. The pending
+        # signal never authorises a transaction on its own.
+        fresh = next((
+            item for item in self._rotation_allocator.rank(now_ns=now, limit=3)
+            if item.assessment.exit_exchange_id == eid
+            and item.assessment.replacement_exchange_id
+                == proposed.assessment.replacement_exchange_id
+            and item.assessment.gain_after_buffer >= 5.0
+        ), None)
+        if fresh is None:
+            return ()
+        record = self._mapping.get(eid)
+        if rotation_mapped_token(record) is None:
+            return ()
+        portfolio = snapshot.runtime.portfolio
+        if (
+            not portfolio.account_trusted
+            or portfolio.trust_grade is not AccountTrustGrade.TRUSTED
+            or portfolio.account_proxy_uncertainty != 0
+            or any(
+                o.uncertain
+                or (
+                    o.open
+                    and o.market_id == snapshot.market_id
+                    and o.tournament_id == snapshot.tournament_id
+                )
+                for o in portfolio.orders
+            )
+        ):
+            return ()
+        book = snapshot.runtime.book(eid)
+        depth_ns = snapshot.sig_depth_observed_ns
+        if (
+            not snapshot.sig_depth_trusted or not snapshot.sig_bbo_trusted
+            or book is None or not book.trusted_depth or depth_ns is None
+        ):
+            return ()
+        age = now - depth_ns
+        max_age = (
+            self._max_sig_stream_depth_age_ns
+            if snapshot.sig_stream_depth_corroborated
+            else self._max_sig_depth_age_ns
+        )
+        bbo_age = now - snapshot.sig_bbo_observed_ns
+        if (
+            age < 0 or age > max_age
+            or bbo_age < 0 or bbo_age > self._max_sig_bbo_age_ns
+        ):
+            return ()
+        signed = portfolio.signed_inventory(eid, snapshot.tournament_id)
+        if not math.isfinite(signed) or signed == 0 or signed != math.trunc(signed):
+            return ()
+        action = OrderAction.SELL if signed > 0 else OrderAction.BUY
+        if signed * fresh.assessment.shares == 0:
+            return ()
+        context = (
+            self._risk_context_source()
+            if callable(self._risk_context_source)
+            else self._risk_context_source
+        )
+        # Respect every configured order/open-order limit in every risk
+        # profile. Never assume a reducing order is free to remain OPEN.
+        limits = [item for item in (
+            context.limits,
+            None if context.profile is None else context.profile.limits,
+            None if context.profile is None else context.profile.hard_limits,
+        ) if item is not None]
+        if (
+            not limits
+            or context.mode is not ExecutionMode.LIVE
+            or context.capital_state is None
+            or not context.capital_state.reconciliation_complete
+            or not context.capital_state.account_trusted
+            or not context.capital_state.exposure.trusted
+            or context.capital_state.exposure.uncertain_order_exposure != 0
+        ):
+            return ()
+        quantity = min(
+            fresh.assessment.shares, abs(int(signed)),
+            *(item.max_order_size for item in limits),
+            *(max(0, math.floor(
+                item.max_open_order_exposure - portfolio.open_order_exposure
+            )) for item in limits),
+        )
+        if quantity < 1:
+            return ()
+        # Revalue at the ACTUAL permitted size, never extrapolate a 500-share
+        # candidate's net return into a different tranche.
+        revised = fresh.assessment
+        if quantity != revised.shares:
+            old = self._rotation_allocator.exits.get(eid)
+            entry = self._rotation_allocator.entries.get(revised.replacement_exchange_id)
+            entry_ev = None if entry is None else entry.net_ev(quantity)
+            if old is None or entry is None or entry_ev is None or entry_ev <= 0:
+                return ()
+            revised = assess_rotation(
+                HeldPosition(eid, int(signed), old.conservative_fair_yes),
+                Replacement(entry.exchange_id, quantity, entry_ev / quantity),
+                yes_bids=old.yes_bids,
+                yes_asks=old.yes_asks,
+                conditions=RotationConditions(
+                    account_trusted=True,
+                    reconciliation_complete=True,
+                    depth_trusted=True,
+                    book_age_ms=age / 1_000_000,
+                    max_depth_age_ms=max_age / 1_000_000 + 0.001,
+                    no_conflicting_orders=True,
+                    max_tranche_shares=quantity,
+                    exit_cost_per_share=self._rotation_allocator.exit_fee,
+                    extra_buffer_per_share=self._rotation_allocator.rotation_buffer,
+                    min_total_gain=self._rotation_allocator.min_rotation_gain,
+                ),
+            )
+            if revised.status != "CANDIDATE_ONLY":
+                return ()
+        levels = book.bids if action is OrderAction.SELL else book.asks
+        remaining = quantity
+        last = None
+        ticks = None
+        for level in levels:
+            if last is not None and (
+                (action is OrderAction.SELL and level.price_ticks > last)
+                or (action is OrderAction.BUY and level.price_ticks < last)
+            ):
+                return ()
+            last = level.price_ticks
+            if not math.isfinite(level.quantity) or level.quantity < 0:
+                return ()
+            usable = max(0, int(math.floor(level.quantity)))
+            remaining -= min(remaining, usable)
+            ticks = level.price_ticks
+            if remaining == 0:
+                break
+        if remaining or ticks is None or not 1 <= ticks <= 199:
+            return ()
+        if self._crosses_own_quote(eid, action, ticks):
+            return ()
+        opportunity = Opportunity(
+            family=StrategyFamily.FV_TAKE,
+            strategy_id="rotation-exit-v1",
+            legs=(CandidateLeg(
+                exchange_id=eid,
+                market_id=snapshot.market_id,
+                tournament_id=snapshot.tournament_id,
+                outcome_side=OutcomeSide.YES,
+                action=action,
+                quantity=quantity,
+                limit_price_ticks=ticks,
+            ),),
+            gross_edge=revised.gain_after_buffer / quantity,
+            fair_value=revised.hold_fair_value / quantity,
+            decision_observation_ns=now,
+        )
+        risk = evaluate_risk(
+            opportunity,
+            self._reservations.overlay_snapshot(snapshot.runtime),
+            replace(context, kill_switch=context.kill_switch or self._kill_switch.active),
+        )
+        if not risk.approved or not risk.inventory_reduction_verified:
+            self._skipped_signals[
+                "rotation_risk_" + (
+                    risk.reason if not risk.approved else "reduction_not_verified"
+                )
+            ] += 1
+            return ()
+        operation_id = f"rotation-exit:{change.event_id}:{eid}"
+        # BUILD-009's SQLite UNIQUE claim survives process restarts. Even a
+        # timed-out send may not be replayed with this same operation identity.
+        if not self._journal.claim_rotation_operation(
+            operation_id, snapshot.tournament_id
+        ):
+            return ()
+        plan = build_execution_plan(
+            risk,
+            logical_operation_id=operation_id + ":exit",
+            created_monotonic_ns=change.observed_monotonic_ns,
+        )
+        self._reservations.reserve(plan.envelope.logical_operation_id, plan.intents)
+        self._rotation_last_exit_ns[eid] = now
+        _LOG.info(
+            "ROTATION exit placing exchange=%s qty=%d action=%s tick=%d "
+            "candidate_gain=%.3f replacement=%s",
+            eid, quantity, action.value, ticks, revised.gain_after_buffer,
+            fresh.assessment.replacement_exchange_id,
+        )
+        try:
+            event = await self._dispatch(plan)
+        except SigExecutionUncertainError:
+            _LOG.warning("ROTATION exit placement UNCERTAIN op=%s", operation_id)
+            return (ExecutionEvent(
+                logical_operation_id=plan.envelope.logical_operation_id,
+                state=LifecycleState.UNCERTAIN,
+                observed_monotonic_ns=now,
+                simulated=False,
+                detail="rotation_exit_uncertain",
+            ),)
+        except SigApiError as exc:
+            _LOG.warning("ROTATION exit rejected op=%s reason=%s", operation_id, exc)
+            return (ExecutionEvent(
+                logical_operation_id=plan.envelope.logical_operation_id,
+                state=LifecycleState.REJECTED,
+                observed_monotonic_ns=now,
+                simulated=False,
+                detail=type(exc).__name__,
+            ),)
+        result = [event]
+        cancelled = await self._cancel_remainder(plan, event, snapshot.tournament_id)
+        if cancelled is not None:
+            result.append(cancelled)
+        return tuple(result)
 
     def _capped_quantity(
         self,
