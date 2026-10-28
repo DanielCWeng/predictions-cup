@@ -128,10 +128,10 @@ class AppSettings(BaseSettings):
     residual_taker_shadow_only: bool = True
     # Optional PASSIVE capital recycling: allocator-nominated holdings become
     # reduce-only on the existing maker. Does not enable two-leg taker orders.
-    rotation_passive_recycling_enabled: bool = True
+    rotation_passive_recycling_enabled: bool = False
     # Execute independently risk-approved, economically positive reducing
     # exits and release capital for later independently priced entries.
-    rotation_active_exits_enabled: bool = True
+    rotation_active_exits_enabled: bool = False
     # Separate aggressive rotation capacity from ordinary residual taker size.
     # The risk engine independently limits every placement at dispatch.
     rotation_max_trade_shares: int = Field(default=500, gt=0, le=2500)
