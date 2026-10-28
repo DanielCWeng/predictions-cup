@@ -254,6 +254,17 @@ def test_no_signal_inside_threshold() -> None:
     harness = _Harness()
     harness.run(_snapshot(bid=147, ask=148))
     assert harness.plans == []
+    assert harness.coordinator._no_residual_markets == 1
+    assert harness.coordinator._candidate_ready_markets == 0
+
+
+def test_price_prefilter_preserves_near_threshold_signal() -> None:
+    harness = _Harness()
+    # Floating-point prices must use the same tick arithmetic as the signal.
+    harness.run(_snapshot(bid=139, ask=140, pm_bid=0.716, pm_ask=0.726))
+    assert len(harness.plans) == 1
+    assert harness.coordinator._no_residual_markets == 0
+    assert harness.coordinator._candidate_ready_markets == 1
 
 
 def test_risk_denial_and_kill_switch_place_nothing() -> None:
@@ -316,6 +327,51 @@ def _with_inventory(snapshot: MakerMarketSnapshot, quantity: float) -> MakerMark
     )
     portfolio = RuntimePortfolio(positions=(position,), orders=(), account_trusted=True)
     return replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+
+def test_economics_rejection_does_not_consume_live_cooldown() -> None:
+    harness = _Harness(economics_gate_enabled=True)
+    ready = _snapshot()
+    # A depth-trust rejection is not an attempted order. It must not block
+    # the same signal when verified depth arrives within the 15s cooldown.
+    untrusted = replace(
+        ready,
+        sig_depth_trusted=False,
+        runtime=replace(
+            ready.runtime,
+            books=(replace(ready.runtime.books[0], trusted_depth=False),),
+        ),
+    )
+    harness.run(untrusted)
+    assert harness.plans == []
+    harness.run(ready, sequence=2)
+    assert len(harness.plans) == 1
+    harness.run(ready, sequence=3)
+    assert len(harness.plans) == 1  # Submitted order consumes cooldown.
+
+
+def test_stale_depth_skips_costly_portfolio_overlay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = _Harness(economics_gate_enabled=True)
+
+    def should_not_overlay(_portfolio: RuntimePortfolio) -> RuntimePortfolio:
+        raise AssertionError("stale depth must be screened before inventory overlays")
+
+    monkeypatch.setattr(harness.reservations, "overlay_portfolio", should_not_overlay)
+    stale = replace(_snapshot(), sig_depth_observed_ns=NOW - 1_500_000_001)
+    harness.run(stale)
+    assert harness.plans == []
+    assert harness.coordinator._skipped_signals["economics_stale_data"] == 1
+
+
+def test_position_cap_rejection_does_not_consume_live_cooldown() -> None:
+    harness = _Harness()
+    harness.coordinator._max_position = 200
+    harness.run(_with_inventory(_snapshot(), 200.0))
+    assert harness.plans == []
+    harness.run(_with_inventory(_snapshot(), 0.0), sequence=2)
+    assert len(harness.plans) == 1
 
 
 def test_position_cap_clips_and_blocks_only_inventory_increasing_takes() -> None:
@@ -519,7 +575,7 @@ def test_taker_liveness_recheck_logs_completed_evaluation(
     asyncio.run(harness.coordinator.run_liveness(stop_event=stop_event, recheck=recheck))
 
     assert harness.coordinator.evaluation_cycles == 2
-    assert "TAKE heartbeat evaluated=1 input_ready=1 signals=1 cycles=1" in caplog.text
+    assert "TAKE heartbeat evaluated=1 candidate_ready=1 no_residual=0 signals=1 attempts=1 cycles=1 skipped={}" in caplog.text
 
 
 def test_taker_liveness_recovers_from_one_slow_evaluation(
@@ -570,7 +626,7 @@ def test_taker_liveness_fails_loudly_when_recheck_never_evaluates(
             )
         )
 
-    assert "TAKE liveness stalled evaluated=0 input_ready=0 signals=0 cycles=0" in caplog.text
+    assert "TAKE liveness stalled evaluated=0 candidate_ready=0 signals=0 cycles=0" in caplog.text
 
 
 def test_economics_gate_passes_depth_qualified_buy_through_same_risk_engine() -> None:
