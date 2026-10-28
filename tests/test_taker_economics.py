@@ -37,7 +37,7 @@ def _eval(**overrides: object) -> TakerEconomics:
             float, overrides.get("min_net_edge_per_share", 0.005)
         ),
         maker_price_ticks=cast(int | None, overrides.get("maker_price_ticks", 99)),
-        available_cash=cast(float | None, overrides.get("available_cash", None)),
+        available_cash=cast(float | None, overrides.get("available_cash")),
         reducible_inventory_shares=cast(
             int, overrides.get("reducible_inventory_shares", 0)
         ),

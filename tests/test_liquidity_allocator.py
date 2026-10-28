@@ -1,16 +1,28 @@
 """Depth-weighted entry and exit matching; no live placement permissions."""
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
+from predictions_cup.maker.capital_rotation import BookLevel
 from predictions_cup.maker.contracts import ExternalQuoteState, MakerMarketSnapshot
 from predictions_cup.maker.liquidity_allocator import (
-    EntryTier, LiquidityWeightedAllocator, RankedEntry, RankedExit, RankedRotation,
+    EntryTier,
+    LiquidityWeightedAllocator,
+    RankedEntry,
+    RankedExit,
+    RankedRotation,
 )
-from predictions_cup.maker.capital_rotation import BookLevel
 from predictions_cup.runtime.models import (
-    AccountTrustGrade, RuntimeBook, RuntimeLevel, RuntimeMarket,
-    RuntimePortfolio, RuntimePosition, RuntimeSnapshot, RuntimeOrderState,
+    AccountTrustGrade,
+    RuntimeBook,
+    RuntimeLevel,
+    RuntimeMarket,
+    RuntimeOrderState,
+    RuntimePortfolio,
+    RuntimePosition,
+    RuntimeSnapshot,
 )
 
 
@@ -192,8 +204,6 @@ def test_unrelated_resting_order_does_not_flush_all_entry_candidates() -> None:
     )
     assert "11" in allocator.exits and "22" in allocator.entries
     changed = snapshot(eid="33", all_positions=positions)
-    from dataclasses import replace
-    from predictions_cup.runtime.models import RuntimeOrderState
     fresh_portfolio = replace(
         changed.runtime.portfolio,
         orders=(RuntimeOrderState(
@@ -221,8 +231,6 @@ def test_quote_churn_for_one_market_invalidates_only_that_market() -> None:
                  pm_bid=.60, pm_ask=.62, yes_ask=106), "token-22",
     )
     # This order is on the exit market, so only the exit becomes unsafe.
-    from dataclasses import replace
-    from predictions_cup.runtime.models import RuntimeOrderState
     stale_exit = snapshot(eid="11", signed=-500, all_positions=positions,
                           pm_bid=.80, pm_ask=.82, yes_ask=164)
     fresh_portfolio = replace(

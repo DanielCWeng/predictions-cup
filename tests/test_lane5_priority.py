@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from predictions_cup.maker.depth_priority import CandidateDepthQueue
 from predictions_cup.runtime.models import OrderAction
-from test_residual_taker_live import _Harness, _snapshot, TOKEN
+from test_residual_taker_live import TOKEN, _Harness, _snapshot
 
 
 def test_prioritises_largest_positive_after_cost_edge():

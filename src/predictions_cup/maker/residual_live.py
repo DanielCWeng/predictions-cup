@@ -31,7 +31,6 @@ from predictions_cup.maker.contracts import MakerMarketSnapshot, QuoteSide
 from predictions_cup.maker.coordinator import MakerStateChange
 from predictions_cup.maker.lifecycle import QuoteRegistry
 from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
-from predictions_cup.maker.rotation_recovery import RotationEvidence, RotationEvidenceCache
 from predictions_cup.maker.residual_taker import (
     COOLDOWN_NS,
     MIN_PM_DEPTH,
@@ -43,13 +42,23 @@ from predictions_cup.maker.residual_taker import (
     SIG_TICK_PROBABILITY,
     residual_input_from_snapshot,
 )
+from predictions_cup.maker.rotation_recovery import RotationEvidence, RotationEvidenceCache
 from predictions_cup.maker.safety import MakerKillSwitch
 from predictions_cup.maker.taker_economics import evaluate_taker_economics
 from predictions_cup.mapping.models import (
-    MappingClass, MappingDirection, MappingDocument, MappingStatus, MarketMapping,
+    MappingClass,
+    MappingDirection,
+    MappingDocument,
+    MappingStatus,
+    MarketMapping,
 )
 from predictions_cup.risk.core import RiskContext, evaluate_risk
-from predictions_cup.runtime.models import AccountTrustGrade, OrderAction, OutcomeSide, RuntimePortfolio
+from predictions_cup.runtime.models import (
+    AccountTrustGrade,
+    OrderAction,
+    OutcomeSide,
+    RuntimePortfolio,
+)
 from predictions_cup.sig.errors import SigApiError, SigExecutionUncertainError
 from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFamily
 
@@ -198,7 +207,8 @@ class ResidualTakerLiveCoordinator:
 
     def log_heartbeat(self) -> None:
         _LOG.info(
-            "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d signals=%d attempts=%d cycles=%d skipped=%s depth_windows=%s",
+            "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d "
+            "signals=%d attempts=%d cycles=%d skipped=%s depth_windows=%s",
             self._evaluated_markets,
             self._candidate_ready_markets,
             self._no_residual_markets,
@@ -327,7 +337,8 @@ class ResidualTakerLiveCoordinator:
                         _LOG.warning("TAKE liveness delayed; forcing one bounded recheck")
                         continue
                     _LOG.critical(
-                        "TAKE liveness stalled evaluated=%d candidate_ready=%d signals=%d cycles=%d",
+                        "TAKE liveness stalled evaluated=%d candidate_ready=%d "
+                        "signals=%d cycles=%d",
                         self._evaluated_markets,
                         self._candidate_ready_markets,
                         self._signals,

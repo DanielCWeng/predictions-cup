@@ -575,7 +575,10 @@ def test_taker_liveness_recheck_logs_completed_evaluation(
     asyncio.run(harness.coordinator.run_liveness(stop_event=stop_event, recheck=recheck))
 
     assert harness.coordinator.evaluation_cycles == 2
-    assert "TAKE heartbeat evaluated=1 candidate_ready=1 no_residual=0 signals=1 attempts=1 cycles=1 skipped={}" in caplog.text
+    assert (
+        "TAKE heartbeat evaluated=1 candidate_ready=1 no_residual=0 "
+        "signals=1 attempts=1 cycles=1 skipped={}" in caplog.text
+    )
 
 
 def test_taker_liveness_recovers_from_one_slow_evaluation(

@@ -50,16 +50,16 @@ from predictions_cup.external.polymarket.health import IngestionHealth
 from predictions_cup.external.polymarket.models import JsonObject, PayloadError
 from predictions_cup.external.polymarket.orderbook import OrderBookStore, event_type
 from predictions_cup.external.polymarket.websocket import MarketWebSocket
-from predictions_cup.maker.depth_priority import CandidateDepthQueue
-from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
 from predictions_cup.maker.adapters import (
     LiveMakerExecutionAdapter,
     ShadowMakerExecutionAdapter,
 )
+from predictions_cup.maker.depth_priority import CandidateDepthQueue
 from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.coordinator import MakerCoordinator, MakerStateChange
 from predictions_cup.maker.factory import MakerRuntimeComponents, build_maker_components
 from predictions_cup.maker.instance_lock import MakerInstanceLock
+from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
 from predictions_cup.maker.noop_recorder import NoopSigRealtimeRecorder
 from predictions_cup.maker.recovery import reconcile_maker_quote_registry
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
@@ -898,7 +898,9 @@ class MakerService:
                         max_trade_shares=self.settings.residual_taker_size,
                         max_position=self.settings.residual_taker_max_position,
                         max_age_ns=self.settings.residual_taker_max_fair_age_ms * 1_000_000,
-                        max_exit_book_age_ns=self.settings.residual_taker_max_sig_depth_age_ms * 1_000_000,
+                        max_exit_book_age_ns=(
+                            self.settings.residual_taker_max_sig_depth_age_ms * 1_000_000
+                        ),
                         fee_per_share=self.settings.residual_taker_fee_per_share,
                         latency_haircut=self.settings.residual_taker_latency_haircut,
                         adverse_haircut=self.settings.residual_taker_adverse_haircut,

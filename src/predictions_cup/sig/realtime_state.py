@@ -729,8 +729,14 @@ class SigRealtimeStateEngine:
             )
             bounds_ok = (
                 all(level.quantity > 0 for level in book.bids + book.asks)
-                and all(book.bids[i].price > book.bids[i + 1].price for i in range(len(book.bids) - 1))
-                and all(book.asks[i].price < book.asks[i + 1].price for i in range(len(book.asks) - 1))
+                and all(
+                    book.bids[i].price > book.bids[i + 1].price
+                    for i in range(len(book.bids) - 1)
+                )
+                and all(
+                    book.asks[i].price < book.asks[i + 1].price
+                    for i in range(len(book.asks) - 1)
+                )
                 and (not book.bids or not book.asks or book.bids[0].price < book.asks[0].price)
             )
             complete_and_current = (

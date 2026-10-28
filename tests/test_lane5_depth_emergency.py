@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 
-from predictions_cup.sig.realtime_state import DepthState
 from predictions_cup.maker.sources import MakerSourceBridge
+from predictions_cup.sig.realtime_state import DepthState
 from test_sig_realtime import FakeRest, _engine, _live_market_batch
 
 
@@ -67,7 +67,9 @@ def test_stream_rejects_old_book_version_and_uncovered_dirty(tmp_path):
             b=_fresh_batch(now+timedelta(milliseconds=50),revision=2,previous=1)
             b["books"][0]["asOf"]["sequence"]=old["books"][0]["asOf"]["sequence"]+1
             b["bookDirty"][0]["at"]=(now+timedelta(seconds=2)).isoformat()
-            await engine.handle_raw_batch(engine.market_topic("26"),b,now+timedelta(milliseconds=50))
+            await engine.handle_raw_batch(
+                engine.market_topic("26"), b, now + timedelta(milliseconds=50)
+            )
             assert not engine.states["36"].trusted
         finally:
             await engine.aclose()
@@ -139,7 +141,9 @@ def test_stream_mode_dirty_hints_fail_closed_without_bulk_rest(tmp_path):
             assert engine.states["36"].depth_state == DepthState.TRACKED_UNTRUSTED
             assert rest.calls == []
             fresh = _fresh_batch(now + timedelta(milliseconds=75), revision=2, previous=1)
-            await engine.handle_raw_batch(engine.market_topic("26"), fresh, now + timedelta(milliseconds=75))
+            await engine.handle_raw_batch(
+                engine.market_topic("26"), fresh, now + timedelta(milliseconds=75)
+            )
             assert engine.states["36"].depth_state == DepthState.TRACKED_TRUSTED
             assert rest.calls == []
         finally:
@@ -415,7 +419,9 @@ def test_duplicate_topic_revision_preserves_trusted_depth(tmp_path):
             before = engine.states["36"].orderbook
             duplicate = _fresh_batch(now + timedelta(milliseconds=100))
             duplicate["books"][0]["asOf"]["sequence"] += 100
-            await engine.handle_raw_batch(engine.market_topic("26"), duplicate, now + timedelta(milliseconds=100))
+            await engine.handle_raw_batch(
+                engine.market_topic("26"), duplicate, now + timedelta(milliseconds=100)
+            )
             assert engine.states["36"].trusted
             assert engine.states["36"].orderbook == before
             assert rest.calls == []

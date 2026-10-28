@@ -10,8 +10,12 @@ from dataclasses import dataclass
 from time import monotonic_ns
 
 from predictions_cup.maker.capital_rotation import (
-    BookLevel, HeldPosition, Replacement, RotationAssessment,
-    RotationConditions, assess_rotation,
+    BookLevel,
+    HeldPosition,
+    Replacement,
+    RotationAssessment,
+    RotationConditions,
+    assess_rotation,
 )
 from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.taker_economics import SIG_TICK
