@@ -347,7 +347,34 @@ class LiquidityWeightedAllocator:
             return hold_fair - proceeds / need
 
         exits = sorted(self.exits.values(), key=exit_depth_cost)[:24]
-        sizes = (50, 100, 250, 500)
+        # Size at real depth breakpoints, not arbitrary round lots only.
+        # Most election books have sparse liquidity: the best executable slice
+        # is often 17 or 83 shares rather than 50/100/250/500. Bound the work.
+        sizes = (1, 10, 25, 50, 100, 250, 500)
+
+        def breakpoints(level_sizes: tuple[int, ...], capacity: int) -> tuple[int, ...]:
+            total = 0
+            points: list[int] = []
+            for amount in level_sizes[:8]:
+                total += amount
+                if 0 < total <= capacity:
+                    points.append(total)
+                if total >= capacity:
+                    break
+            return tuple(points)
+
+        entry_breakpoints = {
+            item.exchange_id: breakpoints(
+                tuple(t.shares for t in item.tiers), self.max_trade_shares
+            ) for item in entries
+        }
+        exit_breakpoints = {
+            item.exchange_id: breakpoints(
+                tuple(level.shares for level in (
+                    item.yes_bids if item.signed_shares > 0 else item.yes_asks
+                )), self.max_trade_shares
+            ) for item in exits
+        }
         # Compute an exit proceeds curve only ONCE per (holding, size).
         # The inner cross-market loop uses plain arithmetic; only the final
         # winners are rebuilt with the full fail-closed rotation validator.
@@ -386,7 +413,12 @@ class LiquidityWeightedAllocator:
                 if old.exchange_id == entry.exchange_id or old.market_id == entry.market_id:
                     continue
                 max_qty = min(entry.capacity, abs(old.signed_shares), self.max_trade_shares)
-                quantities = set([max_qty] + [q for q in sizes if q <= max_qty])
+                quantities = {
+                    max_qty,
+                    *(q for q in sizes if q <= max_qty),
+                    *(q for q in entry_breakpoints[entry.exchange_id] if q <= max_qty),
+                    *(q for q in exit_breakpoints[old.exchange_id] if q <= max_qty),
+                }
                 for qty in quantities:
                     entry_ev = entry.net_ev(qty)
                     if entry_ev is None or entry_ev <= 0:
@@ -408,12 +440,14 @@ class LiquidityWeightedAllocator:
             -row[0], -row[1], row[3].exchange_id, row[4].exchange_id
         ))
         unique: list[RankedRotation] = []
-        seen: set[tuple[str, str]] = set()
+        seen_exits: set[str] = set()
+        seen_entries: set[str] = set()
         for _gain, _density, entry_ev, old, entry, qty in ranked:
-            pair = (old.exchange_id, entry.exchange_id)
-            if pair in seen:
+            # Diversify the bounded live shortlist; otherwise three slightly
+            # different replacements for the SAME holding crowd out other
+            # capital-release opportunities.
+            if old.exchange_id in seen_exits or entry.exchange_id in seen_entries:
                 continue
-            seen.add(pair)
             # Do not trust preliminary arithmetic as execution authority.
             # The original independent signed-inventory/depth validator must
             # accept the exact same slice before publishing a candidate.
@@ -436,6 +470,8 @@ class LiquidityWeightedAllocator:
             )
             if assessment.status != "CANDIDATE_ONLY":
                 continue
+            seen_exits.add(old.exchange_id)
+            seen_entries.add(entry.exchange_id)
             unique.append(RankedRotation(
                 assessment.gain_after_buffer,
                 assessment.gain_after_buffer / qty,
