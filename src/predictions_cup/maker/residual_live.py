@@ -288,7 +288,7 @@ class ResidualTakerLiveCoordinator:
         best_id: str | None = None
         best_edge = -math.inf
         for eid, pending in self._rotation_pending_entries.items():
-            if now_ns < pending.created_ns or now_ns - pending.created_ns >= 75_000_000_000:
+            if now_ns < pending.created_ns or now_ns - pending.created_ns >= 180_000_000_000:
                 continue
             entry = allocator.entries.get(eid)
             if (
@@ -317,7 +317,7 @@ class ResidualTakerLiveCoordinator:
     def _publish_rotation_priority(self, now_ns: int) -> bool:
         """Prefer the planned replacement for a short window after an exit."""
         active = self._active_rotation_exits and any(
-            0 <= now_ns - entry.created_ns < 75_000_000_000
+            0 <= now_ns - entry.created_ns < 180_000_000_000
             for entry in self._rotation_pending_entries.values()
         )
         if active != self._rotation_priority_published:
@@ -999,6 +999,15 @@ class ResidualTakerLiveCoordinator:
         quantity = self._capital_headroom_quantity(snapshot, context, quantity)
         if quantity < 1:
             self._skipped_signals["rotation_entry_no_capital_room"] += 1
+            _LOG.info(
+                "ROTATION entry no headroom exchange=%s exit=%s "
+                "portfolio_gross=%.0f portfolio_open=%.0f "
+                "capital_gross=%s capital_open=%s",
+                eid, pending.exit_exchange_id,
+                portfolio.gross_exposure, portfolio.open_order_exposure,
+                capital.exposure.gross_exposure,
+                capital.exposure.open_order_exposure,
+            )
             return ()
         levels = book.asks if action is OrderAction.BUY else book.bids
         remaining = quantity
