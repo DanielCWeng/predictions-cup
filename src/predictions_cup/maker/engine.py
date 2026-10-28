@@ -139,7 +139,7 @@ class MakerEngine:
         self._rotation_recycle_expires_ns = observed_ns + ttl_ns
 
     def set_rotation_entry_priority(
-        self, active: bool, *, observed_ns: int, ttl_ns: int = 75_000_000_000,
+        self, active: bool, *, observed_ns: int, ttl_ns: int = 180_000_000_000,
     ) -> None:
         """Temporarily favour reducing maker quotes while an exit finances entry."""
         if observed_ns < 0 or ttl_ns <= 0:
