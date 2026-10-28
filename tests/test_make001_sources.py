@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from predictions_cup.external.polymarket.models import BookLevel, BookSnapshot
+from predictions_cup.maker.contracts import MakerMarketSnapshot
 from predictions_cup.maker.service import _mapped_token_ids
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import (

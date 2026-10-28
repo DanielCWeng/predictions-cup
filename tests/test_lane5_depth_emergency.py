@@ -382,7 +382,9 @@ def test_stream_book_preceding_market_batch_global_sequence_is_trusted(tmp_path:
     asyncio.run(scenario())
 
 
-def test_book_sequence_ahead_of_delivery_is_valid_but_uncovered_trade_rejected(tmp_path: Path) -> None:
+def test_book_sequence_ahead_of_delivery_is_valid_but_uncovered_trade_rejected(
+    tmp_path: Path,
+) -> None:
     async def scenario() -> None:
         rest = FakeRest()
         engine, recorder = _engine(tmp_path, rest, tracked={"36"})

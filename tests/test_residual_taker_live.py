@@ -664,8 +664,8 @@ def test_rotation_exit_reuses_build009_and_requires_risk_proof(
 
     from predictions_cup.execution.journal import ExecutionJournal
     from predictions_cup.execution.models import OperationKind
-    from predictions_cup.maker.liquidity_allocator import RankedRotation
     from predictions_cup.maker.capital_rotation import RotationAssessment
+    from predictions_cup.maker.liquidity_allocator import RankedRotation
     from predictions_cup.risk.capital import CapitalRiskState
     from predictions_cup.risk.core import RiskDecision
     from predictions_cup.strategy.core import Opportunity, StrategyFamily
@@ -770,8 +770,8 @@ def test_rotation_exit_rejects_stale_depth_before_any_order() -> None:
     from types import SimpleNamespace
     from typing import cast
 
-    from predictions_cup.maker.liquidity_allocator import RankedRotation
     from predictions_cup.maker.capital_rotation import RotationAssessment
+    from predictions_cup.maker.liquidity_allocator import RankedRotation
     from predictions_cup.risk.capital import CapitalRiskState
 
     h = _Harness()
