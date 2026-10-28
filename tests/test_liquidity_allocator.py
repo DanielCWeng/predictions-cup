@@ -300,3 +300,38 @@ def test_repricing_haircut_rejects_fragile_rotations() -> None:
     assert base[0].gain_susq == pytest.approx(7.5)
     assert cautious[0].gain_susq == pytest.approx(5)
     assert make(reprice_slippage_per_leg=.005) == ()
+
+
+def test_rotation_finds_sparse_depth_breakpoint_instead_of_round_lot() -> None:
+    """Take 37 profitable shares instead of walking 50 into a thin bad bid."""
+    allocator = LiquidityWeightedAllocator(min_rotation_gain=1.0)
+    allocator.exits["old"] = RankedExit(
+        "old", "held", 100, .60, 100,
+        (BookLevel(.60, 37), BookLevel(.30, 63)),
+        (BookLevel(.65, 100),),
+    )
+    allocator.entries["new"] = RankedEntry(
+        "new", "replacement", "BUY", 100,
+        (EntryTier(37, .12), EntryTier(63, .02)),
+    )
+    results = allocator.rank(now_ns=100)
+    assert len(results) == 1
+    assert results[0].assessment.shares == 37
+    assert results[0].gain_susq > 1.0
+
+
+def test_rotation_shortlist_does_not_repeat_same_exit_or_replacement() -> None:
+    allocator = LiquidityWeightedAllocator(min_rotation_gain=1.0)
+    for eid in ("old1", "old2"):
+        allocator.exits[eid] = RankedExit(
+            eid, eid, 500, .60, 100,
+            (BookLevel(.60, 500),), (BookLevel(.65, 500),),
+        )
+    for eid, edge in (("new1", .12), ("new2", .10)):
+        allocator.entries[eid] = RankedEntry(
+            eid, eid, "BUY", 100, (EntryTier(500, edge),),
+        )
+    selected = allocator.rank(now_ns=100, limit=3)
+    assert len(selected) == 2
+    assert len({x.assessment.exit_exchange_id for x in selected}) == 2
+    assert len({x.assessment.replacement_exchange_id for x in selected}) == 2

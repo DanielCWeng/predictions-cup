@@ -514,7 +514,8 @@ class ResidualTakerLiveCoordinator:
             if item.assessment.exit_exchange_id == eid
             and item.assessment.replacement_exchange_id
                 == proposed.assessment.replacement_exchange_id
-            and item.assessment.gain_after_buffer >= 5.0
+            and item.assessment.gain_after_buffer
+                >= self._rotation_allocator.min_rotation_gain
         ), None)
         if fresh is None:
             return ()
