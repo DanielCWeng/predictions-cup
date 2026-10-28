@@ -1,6 +1,6 @@
 # West staged code — passive capital recycling (28 October 2026)
 
-**Status: source on West ONLY; not tested on West, not deployed, not enabled.**
+**Status: copied to GitHub PR #359 for CI; not verified on West after the copy, not enabled.**
 No shell commands, service restarts, execution orders or risk-limit changes were made by this session.
 
 ## Changes staged in shared checkout
