@@ -46,7 +46,7 @@ def summarize_open_orders(orders: tuple[OrderReadDto, ...]) -> tuple[OrderNotion
             continue
         if order.quantity < ZERO:
             raise ValueError("negative open-order quantity")
-        key = (order.exchange_id, str(order.side.value), str(order.action.value))
+        key = (order.exchange_id, order.side, order.action)
         row = groups[key]
         row["count"] += 1
         if order.quantity_filled is None:
@@ -57,7 +57,7 @@ def summarize_open_orders(orders: tuple[OrderReadDto, ...]) -> tuple[OrderNotion
             raise ValueError("invalid filled quantity in active order")
         outstanding = order.quantity - order.quantity_filled
         row["shares"] += outstanding
-        if order.action.value == "buy":
+        if order.action == "buy":
             if order.price_limit is None:
                 row["missing_prices"] += 1
             else:
