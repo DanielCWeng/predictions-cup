@@ -99,7 +99,10 @@ def parse_texas_senate(html: str, *, observed_at: datetime) -> TexasSenateObserv
             digest, status, reporting, counts,
         )
     section = match.group(1)
-    pct_match = re.search(r"Polling Locations Reporting:\s*([0-9]+(?:\.[0-9]+)?)\s*%", section, flags=re.I)
+    pct_match = re.search(
+        r"Polling Locations Reporting:\s*([0-9]+(?:\.[0-9]+)?)\s*%",
+        section, flags=re.I,
+    )
     if pct_match is None:
         return TexasSenateObservation(
             TEXAS_RACE, TEXAS_RESULTS_URL, observed_at.isoformat(),
