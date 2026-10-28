@@ -917,6 +917,11 @@ class MakerService:
                         else None
                     ),
                     active_rotation_exits=self.settings.rotation_active_exits_enabled,
+                    rotation_capacity_priority=(
+                        lambda active, observed_ns: self.core.engine.set_rotation_entry_priority(
+                            active, observed_ns=observed_ns,
+                        )
+                    ),
                     request_rotation_recheck=lambda ids: (
                         runtime.notify_sig(ids) if runtime is not None else None
                     ),

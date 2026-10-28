@@ -120,6 +120,7 @@ class MakerEngine:
         # reducing-only quotes; it never submits an order or changes Risk.
         self._rotation_recycle_ids: frozenset[str] = frozenset()
         self._rotation_recycle_expires_ns = 0
+        self._rotation_entry_priority_expires_ns = 0
 
     def set_rotation_recycle_targets(
         self, exchange_ids: frozenset[str], *, observed_ns: int,
@@ -136,6 +137,16 @@ class MakerEngine:
             raise ValueError("rotation targets require exact SIG exchange IDs")
         self._rotation_recycle_ids = exchange_ids
         self._rotation_recycle_expires_ns = observed_ns + ttl_ns
+
+    def set_rotation_entry_priority(
+        self, active: bool, *, observed_ns: int, ttl_ns: int = 75_000_000_000,
+    ) -> None:
+        """Temporarily favour reducing maker quotes while an exit finances entry."""
+        if observed_ns < 0 or ttl_ns <= 0:
+            raise ValueError("rotation priority requires valid time")
+        self._rotation_entry_priority_expires_ns = (
+            observed_ns + ttl_ns if active else 0
+        )
 
     @property
     def strategy_id(self) -> str:
@@ -229,8 +240,14 @@ class MakerEngine:
             portfolio = snapshot.runtime.portfolio
             soft_cap = self._config.soft_max_gross_exposure
             conserve = (
-                soft_cap is not None
-                and portfolio.gross_exposure + portfolio.open_order_exposure >= soft_cap
+                (
+                    soft_cap is not None
+                    and portfolio.gross_exposure + portfolio.open_order_exposure >= soft_cap
+                )
+                or (
+                    self._rotation_entry_priority_expires_ns > 0
+                    and snapshot.now_monotonic_ns < self._rotation_entry_priority_expires_ns
+                )
             )
             targeted = (
                 snapshot.exchange_id in self._config.recycle_exchange_ids
