@@ -11,7 +11,7 @@ python scripts/ops/sig_election_snapshot.py --race Maine --race Kansas
 ```
 
 By default, this selects only **VERIFIED + EXACT + SAME** 2026 market mappings:
-- Maine Senate: SIG exchanges **959** (Democratic), **960** (Republican).
+- Maine Senate: SIG exchanges **959** (Democratic), **960** (Republican). **Important:** Maine's 2026 U.S. Senate contest uses ranked-choice voting because declared write-in candidates qualified. Its election-night first-choice returns are not conclusive if nobody receives a majority. The readout flags this caveat per exchange. Source: https://www.maine.gov/sos/elections-voting/upcoming/ranked-choice-voting-tabs and the 2026 SOS Candidate Guide.
 - Kansas Senate: **1045** (Democratic).
 - Iowa/Texas: **DERIVED** (not included in the default snapshot).
 - Alaska Senate **NO_TRADE** (excluded even with `--include-derived`).
