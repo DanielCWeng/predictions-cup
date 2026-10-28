@@ -70,7 +70,9 @@ def test_official_and_sig_quotes_are_both_observed_without_alpha() -> None:
     assert result["probability_generated"] is False
     assert result["execution_authority"] is False
     assert result["status"] == "NO_ELECTION_RESULT_SIGNAL"
-    assert len(result["sig_quotes"]) == 2
+    quotes = result["sig_quotes"]
+    assert isinstance(quotes, list)
+    assert len(quotes) == 2
 
 
 def test_contract_mismatch_and_crossed_book_refuse_snapshot() -> None:
