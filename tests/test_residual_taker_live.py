@@ -1009,3 +1009,33 @@ def test_rotation_capital_priority_expires_automatically() -> None:
     )
     harness.run(_snapshot())
     assert len(harness.plans) == 1
+
+
+def test_rotation_capital_redirect_requires_higher_executable_ev() -> None:
+    from types import SimpleNamespace
+    from typing import cast
+
+    from predictions_cup.maker.liquidity_allocator import (
+        EntryTier, LiquidityWeightedAllocator, RankedEntry,
+    )
+    from predictions_cup.maker.residual_live import _PendingRotationEntry
+
+    harness = _Harness()
+    harness.coordinator._active_rotation_exits = True
+    harness.coordinator._rotation_pending_entries["target"] = _PendingRotationEntry(
+        "exit:exit", "held", "target", "BUY", TOURNAMENT,
+        50, 50, .005, NOW - 5, NOW - 10,
+    )
+    allocator = SimpleNamespace(
+        entries={"target": RankedEntry(
+            "target", "target-market", "BUY", NOW,
+            (EntryTier(50, .04),),
+        )},
+        max_age_ns=1_000_000_000, rotation_buffer=.015,
+    )
+    harness.coordinator._rotation_allocator = cast(LiquidityWeightedAllocator, allocator)
+    check = harness.coordinator._rotation_alternative_beats_target
+    assert check(net_per_share=.045, quantity=50, now_ns=NOW) is None
+    assert check(net_per_share=.054, quantity=50, now_ns=NOW) is None
+    assert check(net_per_share=.056, quantity=50, now_ns=NOW) == "target"
+    assert check(net_per_share=None, quantity=50, now_ns=NOW) is None
