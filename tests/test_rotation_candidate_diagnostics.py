@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -15,6 +16,7 @@ from predictions_cup.maker.liquidity_allocator import (
     RankedExit,
 )
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
+from predictions_cup.maker.residual_taker import ResidualTakerSignal
 from test_liquidity_allocator import snapshot
 
 
@@ -174,8 +176,9 @@ def test_coordinated_rotation_recheck_is_bounded_throttled_and_in_memory() -> No
     requested: list[frozenset[str]] = []
     coordinator = object.__new__(ResidualTakerLiveCoordinator)
     coordinator._rotation_allocator = LiquidityWeightedAllocator()
-    coordinator._signal = SimpleNamespace(
-        tracked_exchange_ids=frozenset(str(i) for i in range(300)),
+    coordinator._signal = cast(
+        ResidualTakerSignal,
+        SimpleNamespace(tracked_exchange_ids=frozenset(str(i) for i in range(300))),
     )
     coordinator._request_rotation_recheck = requested.append
     coordinator._active_rotation_exits = True
@@ -221,7 +224,10 @@ def test_coordinated_recheck_disabled_without_live_active_rotation() -> None:
     requested: list[frozenset[str]] = []
     coordinator = object.__new__(ResidualTakerLiveCoordinator)
     coordinator._rotation_allocator = LiquidityWeightedAllocator()
-    coordinator._signal = SimpleNamespace(tracked_exchange_ids=frozenset({"11", "22"}))
+    coordinator._signal = cast(
+        ResidualTakerSignal,
+        SimpleNamespace(tracked_exchange_ids=frozenset({"11", "22"})),
+    )
     coordinator._request_rotation_recheck = requested.append
     coordinator._active_rotation_exits = False
     coordinator._rotation_last_coordinated_recheck_ns = 0
