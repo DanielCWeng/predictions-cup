@@ -438,6 +438,7 @@ class ResidualTakerLiveCoordinator:
                 self._rotation_last_entry_request_ns[eid] = now_ns
                 self._request_rotation_recheck(frozenset({eid}))
         self._publish_rotation_priority(now_ns)
+        self._publish_rotation_preclear(trusted=trusted, now_ns=now_ns)
         if not trusted or not allocator.entries or not allocator.exits:
             self._rotation_pending.clear()
             if self._rotation_reduce_only_targets is not None:
