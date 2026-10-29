@@ -445,6 +445,69 @@ class MakerEngine:
             bid_size = 0 if not desired_bid_levels else desired_bid_levels[0].size
             ask_size = 0 if not desired_ask_levels else desired_ask_levels[0].size
 
+        # SIG rejects resting BUYs when cash cannot cover their full limit
+        # notional; the central gross-exposure limit is not a cash check.
+        # In the current tournament West may have almost zero liquid cash
+        # while holding substantial saleable inventory. Do not flood SIG with
+        # unaffordable quotes or post new collateral-consuming short SELLs.
+        # Authoritative/proxy cash is an upper bound, not permission to spend:
+        # the central Risk gate still independently evaluates every intent.
+        cash = portfolio.account_proxy_cash_balance
+        if cash is not None and cash.is_finite():
+            budget = max(0.0, float(cash))
+            required_bid_cash = (
+                sum(level.size * level.price_ticks * _TICK for level in desired_bid_levels)
+                if desired_bid_levels
+                else (bid_size * bid_ticks * _TICK if bid_ticks is not None else 0.0)
+            )
+            if required_bid_cash > budget + 1e-9:
+                bid_ticks = None
+                bid_size = 0
+                desired_bid_levels = ()
+
+            # A SELL is free of new short collateral only up to the inventory
+            # demonstrably held after every open/uncertain order has filled.
+            # When funds cannot support the short portion, limit ASK quotes
+            # strictly to that proven reducing quantity.
+            proven_long = max(0, math.floor(low))
+            ask_levels_for_cash = (
+                desired_ask_levels
+                if desired_ask_levels
+                else (
+                    (QuoteLevel(price_ticks=ask_ticks, size=ask_size),)
+                    if ask_ticks is not None and ask_size > 0
+                    else ()
+                )
+            )
+            total_ask_qty = 0
+            new_short_collateral = 0.0
+            for level in ask_levels_for_cash:
+                long_part = max(0, min(level.size, proven_long - total_ask_qty))
+                short_part = level.size - long_part
+                new_short_collateral += short_part * (1.0 - level.price_ticks * _TICK)
+                total_ask_qty += level.size
+            if new_short_collateral > budget + 1e-9:
+                if desired_ask_levels:
+                    remaining_long = proven_long
+                    reducing_levels: list[QuoteLevel] = []
+                    for level in desired_ask_levels:
+                        allowed = min(level.size, remaining_long)
+                        if allowed > 0:
+                            reducing_levels.append(
+                                QuoteLevel(price_ticks=level.price_ticks, size=allowed)
+                            )
+                            remaining_long -= allowed
+                    desired_ask_levels = tuple(reducing_levels)
+                    ask_ticks = (
+                        None if not desired_ask_levels
+                        else desired_ask_levels[0].price_ticks
+                    )
+                    ask_size = 0 if not desired_ask_levels else desired_ask_levels[0].size
+                else:
+                    ask_size = min(ask_size, proven_long)
+                    if ask_size <= 0:
+                        ask_ticks = None
+
         if bid_size <= 0:
             bid_ticks = None
             bid_size = 0
