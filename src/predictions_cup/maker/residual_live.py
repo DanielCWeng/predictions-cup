@@ -349,6 +349,49 @@ class ResidualTakerLiveCoordinator:
             )
         return active
 
+    def _publish_rotation_preclear(self, *, trusted: bool, now_ns: int) -> None:
+        """Advisory-only quote clearing; the strict allocator still owns trades."""
+        screen = self._rotation_preclear_allocator
+        pause = self._rotation_pause_quotes
+        if screen is None or pause is None or not self._active_rotation_exits:
+            return
+        if not trusted:
+            if self._rotation_preclear_targets:
+                pause(frozenset(), now_ns)
+                self._rotation_preclear_targets = frozenset()
+            return
+        if now_ns - self._rotation_last_preclear_rank_ns < 500_000_000:
+            return
+        self._rotation_last_preclear_rank_ns = now_ns
+        candidates = screen.rank(now_ns=now_ns, limit=3)
+        # Only prepare a switch which is economically attractive AFTER the
+        # existing exit concession, fees, and replacement edge haircut.
+        # The advisory result is never passed to an order sender.
+        targets: set[str] = set()
+        for item in candidates:
+            exit_id = item.assessment.exit_exchange_id
+            entry_id = item.assessment.replacement_exchange_id
+            if exit_id in screen.blocked_by_orders or entry_id in screen.blocked_by_orders:
+                targets.update((exit_id, entry_id))
+        # Preserve clean entry and exit markets while a previously dispatched
+        # exit is waiting for independent attributable fill confirmation.
+        for item in self._rotation_pending_entries.values():
+            if 0 <= now_ns - item.created_ns < 180_000_000_000:
+                targets.update((item.exit_exchange_id, item.entry_exchange_id))
+        bounded = frozenset(sorted(targets)[:8])
+        previous = self._rotation_preclear_targets
+        self._rotation_preclear_targets = bounded
+        # Renew the five-second lease on each economically valid observation.
+        pause(bounded, now_ns)
+        if bounded != previous:
+            _LOG.info(
+                "ROTATION preclear advisory targets=%s candidates=%d "
+                "blocked_order_markets=%d NO_EXECUTION_PERMISSION",
+                sorted(bounded), len(candidates), len(screen.blocked_by_orders),
+            )
+            if self._request_rotation_recheck is not None and bounded:
+                self._request_rotation_recheck(bounded)
+
     def _capture_rotation(
         self, snapshot: MakerMarketSnapshot, *, risk_ready: bool
     ) -> None:
