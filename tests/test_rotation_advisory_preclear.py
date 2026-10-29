@@ -7,7 +7,7 @@ from dataclasses import replace
 from predictions_cup.maker import GateMode
 from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
-from predictions_cup.runtime.models import RuntimePosition
+from predictions_cup.runtime.models import RuntimeOrderState, RuntimePosition
 from test_liquidity_allocator import snapshot as allocator_snapshot
 from test_make001 import NOW, _engine, _maker_snapshot
 
@@ -26,6 +26,29 @@ def _advisory_candidates() -> tuple[LiquidityWeightedAllocator, LiquidityWeighte
     replacement = allocator_snapshot(
         eid="22", market="m22", pm_bid=.60, pm_ask=.62,
         yes_ask=106, open_order=True, all_positions=held,
+    )
+    # Each venue update sees the SAME global account order state. A fixture
+    # with one market's order missing from the other snapshot correctly
+    # invalidates the allocator cache, but cannot model steady-state LIVE.
+    orders = (
+        RuntimeOrderState("exit-quote", "11", "m11", "t1", 100,
+                          True, False, signed_quantity=100),
+        RuntimeOrderState("entry-quote", "22", "m22", "t1", 100,
+                          True, False, signed_quantity=100),
+    )
+    exit_market = replace(
+        exit_market,
+        runtime=replace(
+            exit_market.runtime,
+            portfolio=replace(exit_market.runtime.portfolio, orders=orders),
+        ),
+    )
+    replacement = replace(
+        replacement,
+        runtime=replace(
+            replacement.runtime,
+            portfolio=replace(replacement.runtime.portfolio, orders=orders),
+        ),
     )
     for allocator in (strict, screen):
         allocator.observe(exit_market, "token-11")
