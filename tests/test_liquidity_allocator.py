@@ -335,3 +335,36 @@ def test_rotation_shortlist_does_not_repeat_same_exit_or_replacement() -> None:
     assert len(selected) == 2
     assert len({x.assessment.exit_exchange_id for x in selected}) == 2
     assert len({x.assessment.replacement_exchange_id for x in selected}) == 2
+
+
+def test_full_depth_large_exit_is_not_hidden_by_25_shallow_touches() -> None:
+    """A 100-SUSQ hurdle needs depth, not the cheapest 100-share touch.
+
+    Previously, 25 superficially attractive 100-share books filled the
+    24-exit shortlist, excluding the genuinely profitable 500-share exit.
+    The executable validator and all cost buffers remain unchanged.
+    """
+    allocator = LiquidityWeightedAllocator(min_rotation_gain=100)
+    allocator.entries["new"] = RankedEntry(
+        "new", "replacement", "BUY", 100, (EntryTier(500, .40),),
+    )
+    for i in range(25):
+        eid = f"shallow-{i:02d}"
+        allocator.exits[eid] = RankedExit(
+            eid, eid, 500, .60, 100,
+            (BookLevel(.60, 100), BookLevel(.01, 400)),
+            (BookLevel(.62, 500),),
+        )
+    allocator.exits["deep"] = RankedExit(
+        "deep", "deep-held", 500, .60, 100,
+        (BookLevel(.59, 500),),
+        (BookLevel(.62, 500),),
+    )
+
+    ranked = allocator.rank(now_ns=100, limit=3)
+    assert ranked
+    assert ranked[0].assessment.exit_exchange_id == "deep"
+    assert ranked[0].assessment.replacement_exchange_id == "new"
+    assert ranked[0].assessment.shares == 500
+    assert ranked[0].gain_susq == pytest.approx(185.0)
+    assert allocator.last_rank_diagnostic["gain_hurdle"] == 100

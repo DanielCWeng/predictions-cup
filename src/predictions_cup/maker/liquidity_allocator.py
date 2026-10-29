@@ -392,10 +392,12 @@ class LiquidityWeightedAllocator:
                 "gain_hurdle": self.min_rotation_gain,
             }
             return ()
-        # Keep this ranking strictly OUT of the hot-path full cross-product.
-        # Per-market observations already hold full depth in memory; screen
-        # all IDs cheaply, then compare at most 12 entries with 24 exits.
-        # This is a bounded shortlist, not a proof of global optimality.
+        # Keep this ranking strictly OUT of the per-market hot path.
+        # Compare at most 12 entries with 256 fresh exits on the slower rank
+        # cadence. The verified live mapping currently has <=140 contracts;
+        # limiting exits to 24 by the FIRST 100 shares can hide an otherwise
+        # profitable 500-share capital switch behind 24 shallow books.
+        # Beyond 256 exits this remains a bounded heuristic shortlist.
         entries = sorted(
             self.entries.values(),
             key=lambda item: item.net_ev(item.capacity) or 0.0,
@@ -424,7 +426,7 @@ class LiquidityWeightedAllocator:
             hold_fair = item.conservative_fair_yes if is_yes else 1 - item.conservative_fair_yes
             return hold_fair - proceeds / need
 
-        exits = sorted(self.exits.values(), key=exit_depth_cost)[:24]
+        exits = sorted(self.exits.values(), key=exit_depth_cost)[:256]
         # Size at real depth breakpoints, not arbitrary round lots only.
         # Most election books have sparse liquidity: the best executable slice
         # is often 17 or 83 shares rather than 50/100/250/500. Bound the work.
