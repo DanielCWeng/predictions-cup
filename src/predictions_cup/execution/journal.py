@@ -218,6 +218,18 @@ class ExecutionJournal:
             ON execution_events(exchange_order_id, event_type, event_id)
             """
         )
+        # Startup/cancel recovery queries only durable terminal cancellations.
+        # Without a matching partial index SQLite scans all venue order events
+        # and joins every matching row back to 100k+ envelopes. On West this
+        # monopolised the asyncio thread for minutes after a restart.
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS execution_events_cancel_terminal_idx
+            ON execution_events(event_type, exchange_order_id, logical_operation_id)
+            WHERE event_type IN ('CANCEL_ACK', 'RECONCILED_TERMINAL')
+              AND exchange_order_id IS NOT NULL
+            """
+        )
         self._connection.commit()
         self._seed_fill_dedupe_keys()
 
@@ -888,6 +900,7 @@ class ExecutionJournal:
             """
             SELECT DISTINCT event.exchange_order_id
             FROM execution_events AS event
+                 INDEXED BY execution_events_cancel_terminal_idx
             JOIN execution_envelopes AS envelope
               ON envelope.logical_operation_id = event.logical_operation_id
             WHERE envelope.operation_kind = ?
