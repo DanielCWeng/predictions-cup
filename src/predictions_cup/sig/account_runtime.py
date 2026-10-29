@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from datetime import UTC, datetime
 from time import monotonic_ns
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def _no_account_quiescence() -> AbstractAsyncContextManager[None]:
+async def _no_account_quiescence() -> AsyncIterator[None]:
     yield
 
 _ACTIVITY_RETRY_ATTEMPTS = 3
