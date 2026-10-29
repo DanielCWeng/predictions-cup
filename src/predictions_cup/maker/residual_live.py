@@ -16,6 +16,7 @@ from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from time import monotonic_ns
 from typing import cast
 
 from predictions_cup.execution.journal import ExecutionJournal
