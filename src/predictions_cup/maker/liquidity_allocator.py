@@ -97,6 +97,7 @@ class LiquidityWeightedAllocator:
         rotation_buffer_per_share: float = 0.01,
         reprice_slippage_per_leg: float = 0.0025,
         min_rotation_gain: float = 5.0,
+        advisory_include_resting_orders: bool = False,
     ) -> None:
         if (
             max_trade_shares < 1 or max_age_ns <= 0 or max_exit_book_age_ns <= 0
