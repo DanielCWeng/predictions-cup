@@ -542,6 +542,12 @@ class ResidualTakerLiveCoordinator:
                     rotation_mapped_token(record),
                     risk_state_trusted=risk_ready,
                 )
+                if self._rotation_preclear_allocator is not None:
+                    self._rotation_preclear_allocator.observe(
+                        snapshot,
+                        rotation_mapped_token(record),
+                        risk_state_trusted=risk_ready,
+                    )
                 self._capture_rotation(snapshot, risk_ready=risk_ready)
                 if self._active_rotation_exits and exchange_id in self._rotation_pending_entries:
                     entered = await self._execute_rotation_entry(change, snapshot)
