@@ -8,7 +8,6 @@ from predictions_cup.maker import GateMode
 from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
 from predictions_cup.runtime.models import RuntimePosition
-
 from test_liquidity_allocator import snapshot as allocator_snapshot
 from test_make001 import NOW, _engine, _maker_snapshot
 
