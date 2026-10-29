@@ -121,6 +121,8 @@ class MakerEngine:
         self._rotation_recycle_ids: frozenset[str] = frozenset()
         self._rotation_recycle_expires_ns = 0
         self._rotation_entry_priority_expires_ns = 0
+        self._rotation_quote_pause_ids: frozenset[str] = frozenset()
+        self._rotation_quote_pause_expires_ns = 0
 
     def set_rotation_recycle_targets(
         self, exchange_ids: frozenset[str], *, observed_ns: int,
