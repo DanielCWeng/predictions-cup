@@ -139,6 +139,7 @@ class LiquidityWeightedAllocator:
         eid = snapshot.exchange_id
         self.entries.pop(eid, None)
         self.exits.pop(eid, None)
+        self.blocked_by_orders.discard(eid)
         self.observed += 1
         if mapped_token is None:
             return
@@ -186,9 +187,16 @@ class LiquidityWeightedAllocator:
                 self.entries.pop(changed, None)
                 self.exits.pop(changed, None)
         self._open_orders_fingerprint = order_state
-        if any(o.open and o.market_id == snapshot.market_id and
-               o.tournament_id == snapshot.tournament_id for o in portfolio.orders):
-            return
+        if any(
+            o.open and o.exchange_id == eid
+            and o.tournament_id == snapshot.tournament_id
+            for o in portfolio.orders
+        ):
+            if not self.advisory_include_resting_orders:
+                return
+            # Hypothetical economics only: the regular allocator still
+            # requires a clean book and a new trusted risk check to execute.
+            self.blocked_by_orders.add(eid)
         if not snapshot.sig_depth_trusted:
             return
         book = snapshot.runtime.book(eid)
