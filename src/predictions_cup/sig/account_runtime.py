@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Awaitable, Callable, Mapping
-from contextlib import suppress
+from contextlib import AbstractAsyncContextManager, asynccontextmanager, suppress
 from datetime import UTC, datetime
 from time import monotonic_ns
 from typing import Protocol, cast
@@ -30,7 +30,14 @@ from predictions_cup.sig.realtime_subscriber import (
 MintToken = Callable[[], Awaitable[RealtimeTokenDto]]
 AuthoritativeResync = Callable[[], Awaitable[AccountAuthoritativeSnapshot]]
 ClockNs = Callable[[], int]
+AccountQuiescence = Callable[[], AbstractAsyncContextManager[None]]
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _no_account_quiescence() -> AbstractAsyncContextManager[None]:
+    yield
+
 _ACTIVITY_RETRY_ATTEMPTS = 3
 
 
@@ -121,10 +128,12 @@ class AccountRealtimeController:
         clock_ns: ClockNs = monotonic_ns,
         observation_emitter: ObservationEmitter | None = None,
         observation_process_instance_id: str | None = None,
+        reconciliation_quiescence: AccountQuiescence = _no_account_quiescence,
     ) -> None:
         self._state = state
         self._mint_token = mint_token
         self._authoritative_resync = authoritative_resync
+        self._reconciliation_quiescence = reconciliation_quiescence
         if refresh_interval_seconds <= 0:
             raise ValueError("refresh_interval_seconds must be positive")
         self._refresh_interval_seconds = refresh_interval_seconds
@@ -246,7 +255,10 @@ class AccountRealtimeController:
                 await self._refresh_authoritative(datetime.now(UTC), trigger_reason="periodic")
 
     async def _restore_trust_while_subscribed(self) -> None:
-        async with self._refresh_lock:
+        # Keep the maker/taker cycle paused through the REST snapshot,
+        # buffered callbacks drain and final trust transition. Releasing it
+        # after REST alone permits new local orders before the generation fence.
+        async with self._refresh_lock, self._reconciliation_quiescence():
             await self._restore_trust_while_subscribed_locked()
 
     async def _restore_trust_while_subscribed_locked(self) -> None:
@@ -336,7 +348,7 @@ class AccountRealtimeController:
         self, observed_at: datetime, *, trigger_reason: str | None = None
     ) -> None:
         del observed_at
-        async with self._refresh_lock:
+        async with self._refresh_lock, self._reconciliation_quiescence():
             refresh_id = uuid4().hex
             started_ns = self._clock_ns()
             generation_at_start = self._resync_generation
