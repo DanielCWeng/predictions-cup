@@ -907,6 +907,33 @@ class MakerService:
                         adverse_haircut=self.settings.residual_taker_adverse_haircut,
                         min_marginal_net_edge=self.settings.residual_taker_min_net_edge,
                     ),
+                    rotation_preclear_allocator=(
+                        LiquidityWeightedAllocator(
+                            max_trade_shares=self.settings.rotation_max_trade_shares,
+                            min_rotation_gain=self.settings.rotation_min_total_gain,
+                            max_position=self.settings.residual_taker_max_position,
+                            max_age_ns=(
+                                self.settings.residual_taker_max_fair_age_ms * 1_000_000
+                            ),
+                            max_exit_book_age_ns=(
+                                self.settings.residual_taker_max_sig_depth_age_ms * 1_000_000
+                            ),
+                            fee_per_share=self.settings.residual_taker_fee_per_share,
+                            latency_haircut=self.settings.residual_taker_latency_haircut,
+                            adverse_haircut=self.settings.residual_taker_adverse_haircut,
+                            min_marginal_net_edge=self.settings.residual_taker_min_net_edge,
+                            advisory_include_resting_orders=True,
+                        )
+                        if self.settings.rotation_active_exits_enabled else None
+                    ),
+                    rotation_pause_quotes=(
+                        lambda ids, observed_ns: (
+                            self.core.engine.set_rotation_quote_pause_targets(
+                                ids, observed_ns=observed_ns,
+                            )
+                        )
+                        if self.settings.rotation_active_exits_enabled else None
+                    ),
                     rotation_reduce_only_targets=(
                         (
                             lambda ids, observed_ns: self.core.engine.set_rotation_recycle_targets(
