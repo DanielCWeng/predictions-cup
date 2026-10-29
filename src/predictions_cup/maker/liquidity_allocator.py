@@ -149,15 +149,18 @@ class LiquidityWeightedAllocator:
         if not risk_state_trusted:
             self.entries.clear()
             self.exits.clear()
+            self.blocked_by_orders.clear()
             return
         # Explicitly disallow the PROXY state and ambiguous outstanding fills.
         if not portfolio.account_trusted or portfolio.trust_grade is not AccountTrustGrade.TRUSTED:
             self.entries.clear()
             self.exits.clear()
+            self.blocked_by_orders.clear()
             return
         if portfolio.account_proxy_uncertainty != 0 or any(o.uncertain for o in portfolio.orders):
             self.entries.clear()
             self.exits.clear()
+            self.blocked_by_orders.clear()
             return
         # Position changes alter global gross headroom; resting quote churn
         # affects only the relevant exchange. Do not erase every independent
