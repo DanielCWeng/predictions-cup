@@ -13,8 +13,6 @@ from predictions_cup.maker.liquidity_allocator import (
     RankedEntry,
     RankedExit,
 )
-from predictions_cup.runtime.models import RuntimeBook, RuntimeLevel
-
 from test_liquidity_allocator import snapshot
 
 
