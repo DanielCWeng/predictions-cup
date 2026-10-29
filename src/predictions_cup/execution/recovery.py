@@ -857,7 +857,8 @@ def _ack_proves_no_execution(event: object) -> bool:
             "orderId" not in detail
             or detail["orderId"] is not None
             or detail.get("open") is not False
-            or detail.get("fillPrice") is not None
+            or "fillPrice" not in detail
+            or detail["fillPrice"] is not None
             or getattr(event, "exchange_order_id", None) is not None
             or not getattr(event, "exchange_id", None)
         ):
