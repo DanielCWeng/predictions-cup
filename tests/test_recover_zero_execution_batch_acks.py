@@ -67,7 +67,7 @@ def _placement(journal: ExecutionJournal) -> ExecutionEnvelope:
             outcome_side=OutcomeSide.YES,
             action=OrderAction.SELL,
             quantity=(i + 1) * 100,
-            limit_price_ticks=500,
+            limit_price_ticks=100,
             strategy_id="fixture",
             decision_observation_ns=123,
         )
