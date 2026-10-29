@@ -5,10 +5,12 @@ from __future__ import annotations
 from dataclasses import replace
 from decimal import Decimal
 
+from predictions_cup.maker import MakerMarketSnapshot
+
 from test_make001 import _engine, _maker_snapshot
 
 
-def _cash_snapshot(*, cash: str, inventory: float = 0.0):
+def _cash_snapshot(*, cash: str, inventory: float = 0.0) -> MakerMarketSnapshot:
     snapshot = _maker_snapshot(signed_inventory=inventory)
     return replace(
         snapshot,
