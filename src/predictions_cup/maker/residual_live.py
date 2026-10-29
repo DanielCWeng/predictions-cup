@@ -222,6 +222,7 @@ class ResidualTakerLiveCoordinator:
         self._rotation_capacity_priority_enabled = rotation_capacity_priority_enabled
         self._rotation_priority_published = False
         self._rotation_evidence = RotationEvidenceCache()
+        self._rotation_risk_block_counts: Counter[str] = Counter()
         self._rotation_last_rank_ns = 0
         self._allow_bbo_proxy = allow_bbo_proxy
         # Remainder cancels that did not conclude; retried every cycle so a
@@ -282,6 +283,16 @@ class ResidualTakerLiveCoordinator:
                   round(r.entry_ev_susq, 3)) for r in ranked],
                 self._rotation_evidence.qualified_observations,
                 len(self._rotation_evidence.history),
+            )
+            now_ns = monotonic_ns()
+            _LOG.info(
+                "ROTATION diagnostics strict=%s advisory=%s risk_blocks=%s",
+                self._rotation_allocator.eligibility_report(now_ns),
+                (
+                    self._rotation_preclear_allocator.eligibility_report(now_ns)
+                    if self._rotation_preclear_allocator is not None else None
+                ),
+                dict(self._rotation_risk_block_counts.most_common(12)),
             )
 
     def _rotation_alternative_beats_target(
@@ -583,6 +594,24 @@ class ResidualTakerLiveCoordinator:
                     and capital.exposure.uncertain_order_exposure == 0
                     and not (capital.global_halt is not None and capital.global_halt.active)
                 )
+                if not risk_ready:
+                    if risk_context.kill_switch or self._kill_switch.active:
+                        reason = "kill_switch"
+                    elif capital is None:
+                        reason = "capital_state_missing"
+                    elif not capital.account_trusted:
+                        reason = "risk_account_untrusted"
+                    elif not capital.reconciliation_complete:
+                        reason = "risk_reconciliation_incomplete"
+                    elif not capital.marks_trusted:
+                        reason = "risk_marks_untrusted"
+                    elif not capital.exposure.trusted:
+                        reason = "risk_exposure_untrusted"
+                    elif capital.exposure.uncertain_order_exposure != 0:
+                        reason = "risk_uncertain_order_exposure"
+                    else:
+                        reason = "risk_halt"
+                    self._rotation_risk_block_counts[reason] += 1
                 self._rotation_allocator.observe(
                     snapshot,
                     rotation_mapped_token(record),
