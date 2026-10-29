@@ -371,7 +371,7 @@ class ResidualTakerLiveCoordinator:
         for item in candidates:
             exit_id = item.assessment.exit_exchange_id
             entry_id = item.assessment.replacement_exchange_id
-            if exit_id in screen.blocked_by_orders or entry_id in screen.blocked_by_orders:
+            if item.advisory_requires_clear:
                 targets.update((exit_id, entry_id))
         # Preserve clean entry and exit markets while a previously dispatched
         # exit is waiting for independent attributable fill confirmation.
