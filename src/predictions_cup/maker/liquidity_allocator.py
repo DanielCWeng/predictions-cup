@@ -6,6 +6,7 @@ on heartbeat/request. No I/O, orders, cash reservations or risk bypass.
 from __future__ import annotations
 
 import math
+from collections import Counter
 from dataclasses import dataclass
 from time import monotonic_ns
 
@@ -128,6 +129,29 @@ class LiquidityWeightedAllocator:
         self._positions_fingerprint: tuple[object, ...] | None = None
         self._open_orders_fingerprint: dict[str, tuple[tuple[object, ...], ...]] = {}
         self.observed = 0
+        # Bounded in-memory evidence of why candidates vanish. No historical
+        # storage, network I/O or trading permission is introduced here.
+        self.diagnostic_counts: Counter[str] = Counter()
+        self.latest_eligibility: dict[str, tuple[int, str]] = {}
+        self.last_rank_diagnostic: dict[str, float | int | str | None] = {}
+
+    def _diagnose(self, eid: str, observed_ns: int, reason: str) -> None:
+        self.diagnostic_counts[reason] += 1
+        self.latest_eligibility[eid] = (observed_ns, reason)
+
+    def eligibility_report(self, now_ns: int) -> dict[str, object]:
+        """Recent per-market eligibility, not tradeability or execution authority."""
+        current = Counter(
+            reason for observed_ns, reason in self.latest_eligibility.values()
+            if 0 <= now_ns - observed_ns <= 60_000_000_000
+        )
+        return {
+            "recent_markets": sum(current.values()),
+            "recent_reasons": dict(current.most_common(12)),
+            "total_observations": self.observed,
+            "total_reasons": dict(self.diagnostic_counts.most_common(12)),
+            "rank": dict(self.last_rank_diagnostic),
+        }
 
     def observe(
         self,
@@ -143,6 +167,7 @@ class LiquidityWeightedAllocator:
         self.blocked_by_orders.discard(eid)
         self.observed += 1
         if mapped_token is None:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "mapping_not_exact_same")
             return
         portfolio = snapshot.runtime.portfolio
         # RISK-002 must separately certify complete issuer reconciliation.
@@ -151,17 +176,20 @@ class LiquidityWeightedAllocator:
             self.entries.clear()
             self.exits.clear()
             self.blocked_by_orders.clear()
+            self._diagnose(eid, snapshot.now_monotonic_ns, "capital_risk_not_ready")
             return
         # Explicitly disallow the PROXY state and ambiguous outstanding fills.
         if not portfolio.account_trusted or portfolio.trust_grade is not AccountTrustGrade.TRUSTED:
             self.entries.clear()
             self.exits.clear()
             self.blocked_by_orders.clear()
+            self._diagnose(eid, snapshot.now_monotonic_ns, "account_not_trusted")
             return
         if portfolio.account_proxy_uncertainty != 0 or any(o.uncertain for o in portfolio.orders):
             self.entries.clear()
             self.exits.clear()
             self.blocked_by_orders.clear()
+            self._diagnose(eid, snapshot.now_monotonic_ns, "uncertain_orders_or_cash")
             return
         # Position changes alter global gross headroom; resting quote churn
         # affects only the relevant exchange. Do not erase every independent
@@ -197,17 +225,21 @@ class LiquidityWeightedAllocator:
             for o in portfolio.orders
         ):
             if not self.advisory_include_resting_orders:
+                self._diagnose(eid, snapshot.now_monotonic_ns, "resting_order_on_market")
                 return
             # Hypothetical economics only: the regular allocator still
             # requires a clean book and a new trusted risk check to execute.
             self.blocked_by_orders.add(eid)
         if not snapshot.sig_depth_trusted:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "sig_depth_untrusted")
             return
         book = snapshot.runtime.book(eid)
         if book is None or not book.trusted_depth:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "sig_book_missing_or_untrusted")
             return
         depth_ns = snapshot.sig_depth_observed_ns
         if depth_ns is None:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "sig_depth_timestamp_missing")
             return
         age = snapshot.now_monotonic_ns - depth_ns
         # The 15s extended window only applies to independently guarded WS depth.
@@ -216,16 +248,22 @@ class LiquidityWeightedAllocator:
             if snapshot.sig_stream_depth_corroborated else self.max_exit_book_age_ns
         )
         if age < 0 or age > allowed_age or not snapshot.sig_bbo_trusted:
+            reason = "sig_depth_stale" if age < 0 or age > allowed_age else "sig_bbo_untrusted"
+            self._diagnose(eid, snapshot.now_monotonic_ns, reason)
             return
         quote = snapshot.external_quotes.get(mapped_token)
         if quote is None or not quote.trusted:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "pm_quote_missing_or_untrusted")
             return
         ref_age = snapshot.now_monotonic_ns - quote.observed_monotonic_ns
         if ref_age < 0 or ref_age > self.max_age_ns:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "pm_quote_stale")
             return
         if quote.best_bid is None or quote.best_ask is None:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "pm_two_sided_book_missing")
             return
         if quote.best_bid > quote.best_ask:
+            self._diagnose(eid, snapshot.now_monotonic_ns, "pm_book_crossed")
             return
         try:
             # Only the executable prefix for our largest 500-share tranche is
@@ -246,6 +284,7 @@ class LiquidityWeightedAllocator:
             bids = prefix(book.bids)
             asks = prefix(book.asks)
         except (ValueError, OverflowError):
+            self._diagnose(eid, snapshot.now_monotonic_ns, "sig_depth_invalid")
             return
         held = portfolio.signed_inventory(eid, snapshot.tournament_id)
         low, high = portfolio.worst_case_inventory_bounds(eid, snapshot.tournament_id)
@@ -307,6 +346,25 @@ class LiquidityWeightedAllocator:
             self.entries[eid] = max(
                 alternatives, key=lambda item: (item.net_ev(item.capacity) or 0, item.capacity)
             )
+        # A valid quote can provide an exit, an entry or neither. Distinguish
+        # genuinely weak economics from missing or untrusted source data.
+        if eid in self.entries and eid in self.exits:
+            reason = "eligible_entry_and_exit"
+        elif eid in self.entries:
+            reason = "eligible_entry_only"
+        elif eid in self.exits:
+            reason = "eligible_exit_only"
+        elif not bids and not asks:
+            reason = "sig_executable_depth_empty"
+        elif quote.best_bid_size is None and quote.best_ask_size is None:
+            reason = "pm_depth_size_missing"
+        elif quote.best_bid_size is not None and quote.best_bid_size < 1 and (
+            quote.best_ask_size is None or quote.best_ask_size < 1
+        ):
+            reason = "pm_depth_size_below_one"
+        else:
+            reason = "no_marginal_entry_edge_or_reducing_exit"
+        self._diagnose(eid, now, reason)
         if self.observed % 4096 == 0:
             # Bound memory independently of heartbeat frequency.
             self._expire(now)
@@ -328,6 +386,11 @@ class LiquidityWeightedAllocator:
         current = monotonic_ns() if now_ns is None else now_ns
         self._expire(current)
         if not self.entries or not self.exits:
+            self.last_rank_diagnostic = {
+                "entries": len(self.entries), "exits": len(self.exits),
+                "economically_priced_pairs": 0, "best_gain": None,
+                "gain_hurdle": self.min_rotation_gain,
+            }
             return ()
         # Keep this ranking strictly OUT of the hot-path full cross-product.
         # Per-market observations already hold full depth in memory; screen
@@ -421,6 +484,8 @@ class LiquidityWeightedAllocator:
             return exit_curve[key]
 
         ranked: list[tuple[float, float, float, RankedExit, RankedEntry, int]] = []
+        best_gain = -math.inf
+        priced_pairs = 0
         for entry in entries:
             for old in exits:
                 # Market ID identifies the SIG contract, not a proof of
@@ -449,8 +514,16 @@ class LiquidityWeightedAllocator:
                     gain = entry_ev - concession - qty * (
                         self.exit_fee + self.rotation_buffer
                     )
+                    priced_pairs += 1
+                    best_gain = max(best_gain, gain)
                     if gain >= self.min_rotation_gain:
                         ranked.append((gain, gain / qty, entry_ev, old, entry, qty))
+        self.last_rank_diagnostic = {
+            "entries": len(self.entries), "exits": len(self.exits),
+            "economically_priced_pairs": priced_pairs,
+            "best_gain": round(best_gain, 4) if math.isfinite(best_gain) else None,
+            "gain_hurdle": self.min_rotation_gain,
+        }
         ranked.sort(key=lambda row: (
             -row[0], -row[1], row[3].exchange_id, row[4].exchange_id
         ))
