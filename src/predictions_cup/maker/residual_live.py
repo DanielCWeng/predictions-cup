@@ -158,6 +158,8 @@ class ResidualTakerLiveCoordinator:
         max_fair_age_ns: int = 5_000_000_000,
         request_fresh_depth: Callable[[str, float], None] | None = None,
         rotation_allocator: LiquidityWeightedAllocator | None = None,
+        rotation_preclear_allocator: LiquidityWeightedAllocator | None = None,
+        rotation_pause_quotes: Callable[[frozenset[str], int], None] | None = None,
         rotation_reduce_only_targets: Callable[[frozenset[str], int], None] | None = None,
         active_rotation_exits: bool = False,
         request_rotation_recheck: Callable[[frozenset[str]], None] | None = None,
@@ -204,6 +206,10 @@ class ResidualTakerLiveCoordinator:
         self._max_fair_age_ns = max_fair_age_ns
         self._request_fresh_depth = request_fresh_depth
         self._rotation_allocator = rotation_allocator
+        self._rotation_preclear_allocator = rotation_preclear_allocator
+        self._rotation_pause_quotes = rotation_pause_quotes
+        self._rotation_last_preclear_rank_ns = 0
+        self._rotation_preclear_targets: frozenset[str] = frozenset()
         self._rotation_reduce_only_targets = rotation_reduce_only_targets
         self._active_rotation_exits = active_rotation_exits
         self._request_rotation_recheck = request_rotation_recheck
