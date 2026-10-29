@@ -77,6 +77,7 @@ class RankedRotation:
     entry_ev_susq: float
     assessment: RotationAssessment
     entry_direction: str
+    advisory_requires_clear: bool = False
 
 
 class LiquidityWeightedAllocator:
@@ -490,6 +491,13 @@ class LiquidityWeightedAllocator:
                 assessment.gain_after_buffer,
                 assessment.gain_after_buffer / qty,
                 entry_ev, assessment, entry.direction,
+                advisory_requires_clear=(
+                    self.advisory_include_resting_orders
+                    and (
+                        old.exchange_id in self.blocked_by_orders
+                        or entry.exchange_id in self.blocked_by_orders
+                    )
+                ),
             ))
             if len(unique) >= limit:
                 break
