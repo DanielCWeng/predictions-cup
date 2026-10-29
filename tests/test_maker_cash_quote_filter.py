@@ -6,7 +6,6 @@ from dataclasses import replace
 from decimal import Decimal
 
 from predictions_cup.maker import MakerMarketSnapshot
-
 from test_make001 import _engine, _maker_snapshot
 
 
