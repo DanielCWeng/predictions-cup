@@ -225,6 +225,8 @@ class ResidualTakerLiveCoordinator:
         self._rotation_evidence = RotationEvidenceCache()
         self._rotation_risk_block_counts: Counter[str] = Counter()
         self._rotation_last_rank_ns = 0
+        self._rotation_last_coordinated_recheck_ns = 0
+        self._rotation_coordinated_rechecks = 0
         self._allow_bbo_proxy = allow_bbo_proxy
         # Remainder cancels that did not conclude; retried every cycle so a
         # taker order is never left resting at a stale price.
@@ -406,6 +408,43 @@ class ResidualTakerLiveCoordinator:
             if self._request_rotation_recheck is not None and bounded:
                 self._request_rotation_recheck(bounded)
 
+    def _schedule_rotation_coordinated_recheck(
+        self, *, trusted: bool, now_ns: int,
+    ) -> None:
+        """Refresh cached observations of both rotation legs in one cycle.
+
+        This only asks the in-memory maker runtime to rebuild snapshots: it
+        neither requests venue REST books nor authorises a placement. Without
+        coordinated observations, 5s entry/exit cache TTLs frequently expire
+        before two asynchronously updated markets can be compared.
+        """
+        allocator = self._rotation_allocator
+        request = self._request_rotation_recheck
+        if (
+            not trusted or not self._active_rotation_exits
+            or allocator is None or request is None
+            or (allocator.entries and allocator.exits)
+        ):
+            return
+        if (
+            self._rotation_last_coordinated_recheck_ns
+            and now_ns - self._rotation_last_coordinated_recheck_ns
+                < 15_000_000_000
+        ):
+            return
+        self._rotation_last_coordinated_recheck_ns = now_ns
+        ids = frozenset(sorted(self._signal.tracked_exchange_ids)[:256])
+        if not ids:
+            return
+        request(ids)
+        self._rotation_coordinated_rechecks += 1
+        _LOG.info(
+            "ROTATION coordinated cached-source recheck=%d markets=%d "
+            "strict_entries=%d strict_exits=%d REST_CALLS=0",
+            self._rotation_coordinated_rechecks,
+            len(ids), len(allocator.entries), len(allocator.exits),
+        )
+
     def _capture_rotation(
         self, snapshot: MakerMarketSnapshot, *, risk_ready: bool
     ) -> None:
@@ -453,6 +492,7 @@ class ResidualTakerLiveCoordinator:
                 self._request_rotation_recheck(frozenset({eid}))
         self._publish_rotation_priority(now_ns)
         self._publish_rotation_preclear(trusted=trusted, now_ns=now_ns)
+        self._schedule_rotation_coordinated_recheck(trusted=trusted, now_ns=now_ns)
         if not trusted or not allocator.entries or not allocator.exits:
             self._rotation_pending.clear()
             if self._rotation_reduce_only_targets is not None:
