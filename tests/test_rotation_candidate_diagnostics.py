@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 
 from predictions_cup.maker.capital_rotation import BookLevel
+from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
 from predictions_cup.maker.liquidity_allocator import (
     EntryTier,
     LiquidityWeightedAllocator,
@@ -167,3 +169,64 @@ def test_rank_report_explains_missing_entry_or_exit() -> None:
         "entries": 0, "exits": 0, "economically_priced_pairs": 0,
         "best_gain": None, "gain_hurdle": 100,
     }
+
+def test_coordinated_rotation_recheck_is_bounded_throttled_and_in_memory() -> None:
+    requested: list[frozenset[str]] = []
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._rotation_allocator = LiquidityWeightedAllocator()
+    coordinator._signal = SimpleNamespace(
+        tracked_exchange_ids=frozenset(str(i) for i in range(300)),
+    )
+    coordinator._request_rotation_recheck = requested.append
+    coordinator._active_rotation_exits = True
+    coordinator._rotation_last_coordinated_recheck_ns = 0
+    coordinator._rotation_coordinated_rechecks = 0
+
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=True, now_ns=30_000_000_000,
+    )
+    assert len(requested) == 1
+    assert len(requested[0]) == 256
+    assert coordinator._rotation_coordinated_rechecks == 1
+
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=True, now_ns=31_000_000_000,
+    )
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=False, now_ns=46_000_000_000,
+    )
+    assert len(requested) == 1
+
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=True, now_ns=46_000_000_000,
+    )
+    assert len(requested) == 2
+    assert coordinator._rotation_coordinated_rechecks == 2
+
+    coordinator._rotation_allocator.entries["entry"] = RankedEntry(
+        "entry", "new-market", "BUY", 46_000_000_000,
+        (EntryTier(500, .10),),
+    )
+    coordinator._rotation_allocator.exits["exit"] = RankedExit(
+        "exit", "old-market", 500, .60, 46_000_000_000,
+        (BookLevel(.60, 500),), (BookLevel(.62, 500),),
+    )
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=True, now_ns=90_000_000_000,
+    )
+    assert len(requested) == 2
+
+
+def test_coordinated_recheck_disabled_without_live_active_rotation() -> None:
+    requested: list[frozenset[str]] = []
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._rotation_allocator = LiquidityWeightedAllocator()
+    coordinator._signal = SimpleNamespace(tracked_exchange_ids=frozenset({"11", "22"}))
+    coordinator._request_rotation_recheck = requested.append
+    coordinator._active_rotation_exits = False
+    coordinator._rotation_last_coordinated_recheck_ns = 0
+    coordinator._rotation_coordinated_rechecks = 0
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=True, now_ns=30_000_000_000,
+    )
+    assert requested == []
