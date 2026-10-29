@@ -151,7 +151,8 @@ def test_rank_report_prices_a_pair_but_keeps_100_susq_hurdle() -> None:
         "new", "new-market", "BUY", 100, (EntryTier(500, .10),),
     )
     assert allocator.rank(now_ns=100) == ()
-    assert allocator.last_rank_diagnostic["economically_priced_pairs"] > 0
+    priced = allocator.last_rank_diagnostic["economically_priced_pairs"]
+    assert isinstance(priced, int) and priced > 0
     best = allocator.last_rank_diagnostic["best_gain"]
     assert isinstance(best, float)
     assert 0 < best < 100
