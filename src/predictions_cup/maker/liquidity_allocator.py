@@ -77,6 +77,7 @@ class RankedRotation:
     entry_ev_susq: float
     assessment: RotationAssessment
     entry_direction: str
+    advisory_requires_clear: bool = False
 
 
 class LiquidityWeightedAllocator:
@@ -97,6 +98,7 @@ class LiquidityWeightedAllocator:
         rotation_buffer_per_share: float = 0.01,
         reprice_slippage_per_leg: float = 0.0025,
         min_rotation_gain: float = 5.0,
+        advisory_include_resting_orders: bool = False,
     ) -> None:
         if (
             max_trade_shares < 1 or max_age_ns <= 0 or max_exit_book_age_ns <= 0
@@ -119,6 +121,8 @@ class LiquidityWeightedAllocator:
         # Model extra 0.25c per leg, over and above baseline taker costs.
         self.rotation_buffer = rotation_buffer_per_share + 2 * reprice_slippage_per_leg
         self.min_rotation_gain = min_rotation_gain
+        self.advisory_include_resting_orders = advisory_include_resting_orders
+        self.blocked_by_orders: set[str] = set()
         self.entries: dict[str, RankedEntry] = {}
         self.exits: dict[str, RankedExit] = {}
         self._positions_fingerprint: tuple[object, ...] | None = None
@@ -136,6 +140,7 @@ class LiquidityWeightedAllocator:
         eid = snapshot.exchange_id
         self.entries.pop(eid, None)
         self.exits.pop(eid, None)
+        self.blocked_by_orders.discard(eid)
         self.observed += 1
         if mapped_token is None:
             return
@@ -145,15 +150,18 @@ class LiquidityWeightedAllocator:
         if not risk_state_trusted:
             self.entries.clear()
             self.exits.clear()
+            self.blocked_by_orders.clear()
             return
         # Explicitly disallow the PROXY state and ambiguous outstanding fills.
         if not portfolio.account_trusted or portfolio.trust_grade is not AccountTrustGrade.TRUSTED:
             self.entries.clear()
             self.exits.clear()
+            self.blocked_by_orders.clear()
             return
         if portfolio.account_proxy_uncertainty != 0 or any(o.uncertain for o in portfolio.orders):
             self.entries.clear()
             self.exits.clear()
+            self.blocked_by_orders.clear()
             return
         # Position changes alter global gross headroom; resting quote churn
         # affects only the relevant exchange. Do not erase every independent
@@ -183,9 +191,16 @@ class LiquidityWeightedAllocator:
                 self.entries.pop(changed, None)
                 self.exits.pop(changed, None)
         self._open_orders_fingerprint = order_state
-        if any(o.open and o.market_id == snapshot.market_id and
-               o.tournament_id == snapshot.tournament_id for o in portfolio.orders):
-            return
+        if any(
+            o.open and o.exchange_id == eid
+            and o.tournament_id == snapshot.tournament_id
+            for o in portfolio.orders
+        ):
+            if not self.advisory_include_resting_orders:
+                return
+            # Hypothetical economics only: the regular allocator still
+            # requires a clean book and a new trusted risk check to execute.
+            self.blocked_by_orders.add(eid)
         if not snapshot.sig_depth_trusted:
             return
         book = snapshot.runtime.book(eid)
@@ -476,6 +491,13 @@ class LiquidityWeightedAllocator:
                 assessment.gain_after_buffer,
                 assessment.gain_after_buffer / qty,
                 entry_ev, assessment, entry.direction,
+                advisory_requires_clear=(
+                    self.advisory_include_resting_orders
+                    and (
+                        old.exchange_id in self.blocked_by_orders
+                        or entry.exchange_id in self.blocked_by_orders
+                    )
+                ),
             ))
             if len(unique) >= limit:
                 break

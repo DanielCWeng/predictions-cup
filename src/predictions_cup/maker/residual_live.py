@@ -158,6 +158,8 @@ class ResidualTakerLiveCoordinator:
         max_fair_age_ns: int = 5_000_000_000,
         request_fresh_depth: Callable[[str, float], None] | None = None,
         rotation_allocator: LiquidityWeightedAllocator | None = None,
+        rotation_preclear_allocator: LiquidityWeightedAllocator | None = None,
+        rotation_pause_quotes: Callable[[frozenset[str], int], None] | None = None,
         rotation_reduce_only_targets: Callable[[frozenset[str], int], None] | None = None,
         active_rotation_exits: bool = False,
         request_rotation_recheck: Callable[[frozenset[str]], None] | None = None,
@@ -204,6 +206,10 @@ class ResidualTakerLiveCoordinator:
         self._max_fair_age_ns = max_fair_age_ns
         self._request_fresh_depth = request_fresh_depth
         self._rotation_allocator = rotation_allocator
+        self._rotation_preclear_allocator = rotation_preclear_allocator
+        self._rotation_pause_quotes = rotation_pause_quotes
+        self._rotation_last_preclear_rank_ns = 0
+        self._rotation_preclear_targets: frozenset[str] = frozenset()
         self._rotation_reduce_only_targets = rotation_reduce_only_targets
         self._active_rotation_exits = active_rotation_exits
         self._request_rotation_recheck = request_rotation_recheck
@@ -343,6 +349,51 @@ class ResidualTakerLiveCoordinator:
             )
         return active
 
+    def _publish_rotation_preclear(self, *, trusted: bool, now_ns: int) -> None:
+        """Advisory-only quote clearing; the strict allocator still owns trades."""
+        screen = self._rotation_preclear_allocator
+        pause = self._rotation_pause_quotes
+        if screen is None or pause is None or not self._active_rotation_exits:
+            return
+        if not trusted:
+            if self._rotation_preclear_targets:
+                pause(frozenset(), now_ns)
+                self._rotation_preclear_targets = frozenset()
+            return
+        if now_ns - self._rotation_last_preclear_rank_ns < 500_000_000:
+            return
+        self._rotation_last_preclear_rank_ns = now_ns
+        candidates = screen.rank(now_ns=now_ns, limit=3)
+        # Only prepare a switch which is economically attractive AFTER the
+        # existing exit concession, fees, and replacement edge haircut.
+        # The advisory result is never passed to an order sender.
+        targets: set[str] = set()
+        for item in candidates:
+            exit_id = item.assessment.exit_exchange_id
+            entry_id = item.assessment.replacement_exchange_id
+            if item.advisory_requires_clear:
+                targets.update((exit_id, entry_id))
+        # Preserve clean entry and exit markets while a previously dispatched
+        # exit is waiting for independent attributable fill confirmation.
+        for pending_entry in self._rotation_pending_entries.values():
+            if 0 <= now_ns - pending_entry.created_ns < 180_000_000_000:
+                targets.update(
+                    (pending_entry.exit_exchange_id, pending_entry.entry_exchange_id)
+                )
+        bounded = frozenset(sorted(targets)[:8])
+        previous = self._rotation_preclear_targets
+        self._rotation_preclear_targets = bounded
+        # Renew the five-second lease on each economically valid observation.
+        pause(bounded, now_ns)
+        if bounded != previous:
+            _LOG.info(
+                "ROTATION preclear advisory targets=%s candidates=%d "
+                "blocked_order_markets=%d NO_EXECUTION_PERMISSION",
+                sorted(bounded), len(candidates), len(screen.blocked_by_orders),
+            )
+            if self._request_rotation_recheck is not None and bounded:
+                self._request_rotation_recheck(bounded)
+
     def _capture_rotation(
         self, snapshot: MakerMarketSnapshot, *, risk_ready: bool
     ) -> None:
@@ -389,6 +440,7 @@ class ResidualTakerLiveCoordinator:
                 self._rotation_last_entry_request_ns[eid] = now_ns
                 self._request_rotation_recheck(frozenset({eid}))
         self._publish_rotation_priority(now_ns)
+        self._publish_rotation_preclear(trusted=trusted, now_ns=now_ns)
         if not trusted or not allocator.entries or not allocator.exits:
             self._rotation_pending.clear()
             if self._rotation_reduce_only_targets is not None:
@@ -536,6 +588,12 @@ class ResidualTakerLiveCoordinator:
                     rotation_mapped_token(record),
                     risk_state_trusted=risk_ready,
                 )
+                if self._rotation_preclear_allocator is not None:
+                    self._rotation_preclear_allocator.observe(
+                        snapshot,
+                        rotation_mapped_token(record),
+                        risk_state_trusted=risk_ready,
+                    )
                 self._capture_rotation(snapshot, risk_ready=risk_ready)
                 if self._active_rotation_exits and exchange_id in self._rotation_pending_entries:
                     entered = await self._execute_rotation_entry(change, snapshot)

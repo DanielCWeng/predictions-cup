@@ -121,6 +121,8 @@ class MakerEngine:
         self._rotation_recycle_ids: frozenset[str] = frozenset()
         self._rotation_recycle_expires_ns = 0
         self._rotation_entry_priority_expires_ns = 0
+        self._rotation_quote_pause_ids: frozenset[str] = frozenset()
+        self._rotation_quote_pause_expires_ns = 0
 
     def set_rotation_recycle_targets(
         self, exchange_ids: frozenset[str], *, observed_ns: int,
@@ -146,6 +148,26 @@ class MakerEngine:
             raise ValueError("rotation priority requires valid time")
         self._rotation_entry_priority_expires_ns = (
             observed_ns + ttl_ns if active else 0
+        )
+
+    def set_rotation_quote_pause_targets(
+        self, exchange_ids: frozenset[str], *, observed_ns: int,
+        ttl_ns: int = 5_000_000_000,
+    ) -> None:
+        """Ask the normal maker lifecycle to cancel only its own quotes.
+
+        The advisory allocator may see a better position switch while maker
+        quotes are still open. Pausing a market does not trade, cancel other
+        strategies' orders, claim an exit fill, or bypass central risk.
+        Targets expire automatically if the advisory feed stalls.
+        """
+        if observed_ns < 0 or ttl_ns <= 0 or len(exchange_ids) > 8:
+            raise ValueError("invalid bounded rotation quote-pause targets")
+        if any(not eid.isdigit() for eid in exchange_ids):
+            raise ValueError("rotation pause requires exact SIG exchange IDs")
+        self._rotation_quote_pause_ids = exchange_ids
+        self._rotation_quote_pause_expires_ns = (
+            observed_ns + ttl_ns if exchange_ids else 0
         )
 
     @property
@@ -229,6 +251,13 @@ class MakerEngine:
                 confidence=fair_value.confidence,
                 predictive_shift=prediction.probability_shift,
             )
+
+        if (
+            snapshot.exchange_id in self._rotation_quote_pause_ids
+            and 0 <= snapshot.now_monotonic_ns < self._rotation_quote_pause_expires_ns
+        ):
+            gate = GateDecision(GateMode.CANCEL, "rotation_preclear_owned_quotes")
+            next_recheck_ns = None
 
         # At the soft capital target, stop adding gross exposure and prefer
         # inventory-reducing quotes. Exact recycling IDs remain reduce-only
