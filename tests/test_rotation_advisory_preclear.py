@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from predictions_cup.maker import GateMode, MakerMarketSnapshot
+from predictions_cup.maker import GateMode
 from predictions_cup.maker.liquidity_allocator import LiquidityWeightedAllocator
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
 from predictions_cup.runtime.models import RuntimePosition
