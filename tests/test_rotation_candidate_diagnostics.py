@@ -8,13 +8,13 @@ from types import SimpleNamespace
 import pytest
 
 from predictions_cup.maker.capital_rotation import BookLevel
-from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
 from predictions_cup.maker.liquidity_allocator import (
     EntryTier,
     LiquidityWeightedAllocator,
     RankedEntry,
     RankedExit,
 )
+from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
 from test_liquidity_allocator import snapshot
 
 
