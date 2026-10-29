@@ -375,9 +375,11 @@ class ResidualTakerLiveCoordinator:
                 targets.update((exit_id, entry_id))
         # Preserve clean entry and exit markets while a previously dispatched
         # exit is waiting for independent attributable fill confirmation.
-        for item in self._rotation_pending_entries.values():
-            if 0 <= now_ns - item.created_ns < 180_000_000_000:
-                targets.update((item.exit_exchange_id, item.entry_exchange_id))
+        for pending_entry in self._rotation_pending_entries.values():
+            if 0 <= now_ns - pending_entry.created_ns < 180_000_000_000:
+                targets.update(
+                    (pending_entry.exit_exchange_id, pending_entry.entry_exchange_id)
+                )
         bounded = frozenset(sorted(targets)[:8])
         previous = self._rotation_preclear_targets
         self._rotation_preclear_targets = bounded
