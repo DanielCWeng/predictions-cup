@@ -252,6 +252,13 @@ class MakerEngine:
                 predictive_shift=prediction.probability_shift,
             )
 
+        if (
+            snapshot.exchange_id in self._rotation_quote_pause_ids
+            and 0 <= snapshot.now_monotonic_ns < self._rotation_quote_pause_expires_ns
+        ):
+            gate = GateDecision(GateMode.CANCEL, "rotation_preclear_owned_quotes")
+            next_recheck_ns = None
+
         # At the soft capital target, stop adding gross exposure and prefer
         # inventory-reducing quotes. Exact recycling IDs remain reduce-only
         # regardless of global headroom, so released capacity is not reabsorbed
