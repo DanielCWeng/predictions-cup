@@ -15,8 +15,8 @@ from predictions_cup.execution.models import (
     RuntimeOrderIntent,
 )
 from predictions_cup.execution.recovery import (
-    _PortfolioFillProjection,
     _ack_proves_no_execution,
+    _PortfolioFillProjection,
     _reconcile_bulk_placement,
 )
 from predictions_cup.runtime import OrderAction, OutcomeSide
@@ -42,7 +42,9 @@ def _proof(payload: dict[str, object]) -> bool:
 
 def test_only_complete_zero_execution_ack_qualifies() -> None:
     assert _proof(_zero_response())
-    for field in ("orderId", "open", "remainingQuantity", "quantityTraded", "totalCost", "fillPrice"):
+    for field in (
+        "orderId", "open", "remainingQuantity", "quantityTraded", "totalCost", "fillPrice"
+    ):
         missing = _zero_response()
         del missing[field]
         if field == "fillPrice":
@@ -86,7 +88,9 @@ def _placement(journal: ExecutionJournal) -> ExecutionEnvelope:
     return envelope
 
 
-def _reconcile(journal: ExecutionJournal, envelope: ExecutionEnvelope, *, complete: bool = True) -> None:
+def _reconcile(
+    journal: ExecutionJournal, envelope: ExecutionEnvelope, *, complete: bool = True
+) -> None:
     _reconcile_bulk_placement(
         journal=journal,
         envelope=envelope,
