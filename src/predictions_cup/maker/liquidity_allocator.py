@@ -120,6 +120,8 @@ class LiquidityWeightedAllocator:
         # Model extra 0.25c per leg, over and above baseline taker costs.
         self.rotation_buffer = rotation_buffer_per_share + 2 * reprice_slippage_per_leg
         self.min_rotation_gain = min_rotation_gain
+        self.advisory_include_resting_orders = advisory_include_resting_orders
+        self.blocked_by_orders: set[str] = set()
         self.entries: dict[str, RankedEntry] = {}
         self.exits: dict[str, RankedExit] = {}
         self._positions_fingerprint: tuple[object, ...] | None = None
