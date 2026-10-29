@@ -42,6 +42,7 @@ def test_preclear_screen_finds_economics_but_strict_allocator_stays_blocked() ->
     assert candidate[0].assessment.exit_exchange_id == "11"
     assert candidate[0].assessment.replacement_exchange_id == "22"
     assert candidate[0].gain_susq > 0
+    assert candidate[0].advisory_requires_clear is True
     assert screen.blocked_by_orders == {"11", "22"}
 
 
@@ -64,7 +65,8 @@ def test_strict_allocator_requires_fresh_clean_observations_after_cancellation()
             ),
             "token-22",
         )
-    assert strict.rank(now_ns=30_000_000_000)
+    clean = strict.rank(now_ns=30_000_000_000)
+    assert clean and not clean[0].advisory_requires_clear
     assert screen.blocked_by_orders == set()
 
 
