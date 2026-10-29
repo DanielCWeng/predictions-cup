@@ -887,43 +887,38 @@ def _reconcile_bulk_placement(
     clock_ns: ClockNs,
 ) -> None:
     order_ids = _acknowledged_order_ids(journal, envelope.logical_operation_id)
-    if fills is None or not snapshot_available:
+    if fills is None:
         return
     events = journal.events(envelope.logical_operation_id)
-    # Every submitted intent must be accounted for. SIG can ACK an outcome
-    # without creating an order: orderId=null, open=false, remaining=0,
-    # traded=0, cost=0. Such an ACK is terminal only if ALL fields prove it.
-    # Other no-ID ACKs stay unresolved; never infer closure from absence.
-    if not envelope.intent_ids:
-        return
-    for intent_id in envelope.intent_ids:
-        matching = tuple(
-            event
-            for event in events
-            if event.logical_intent_id == intent_id
-            and event.event_type in {"ACK", "REJECTED"}
-        )
-        if not matching:
-            return
-        if any(
-            event.event_type == "ACK"
-            and event.exchange_order_id is not None
-            and event.exchange_order_id.isdigit()
-            for event in matching
-        ):
-            continue
-        if all(event.event_type == "REJECTED" for event in matching):
-            continue
-        if not all(
-            event.event_type == "ACK"
-            and _ack_proves_no_execution(event)
-            and event.exchange_id not in fills.incomplete_exchange_ids
-            for event in matching
-        ):
-            return
     if not order_ids:
+        # With no venue order IDs, only explicit issuer evidence that EVERY
+        # intent was rejected or acknowledged closed without any execution
+        # can establish a terminal state. Requires complete fill coverage and
+        # an authoritative account snapshot; absence is not proof.
+        if not snapshot_available or not envelope.intent_ids:
+            return
+        for intent_id in envelope.intent_ids:
+            matching = tuple(
+                event
+                for event in events
+                if event.logical_intent_id == intent_id
+                and event.event_type in {"ACK", "REJECTED"}
+            )
+            if not matching:
+                return
+            if all(event.event_type == "REJECTED" for event in matching):
+                continue
+            if not all(
+                event.event_type == "ACK"
+                and _ack_proves_no_execution(event)
+                and event.exchange_id not in fills.incomplete_exchange_ids
+                for event in matching
+            ):
+                return
         _record_terminal(journal, envelope, None, LifecycleState.RECONCILED)
         return
+    # Normal identified orders keep the existing per-order issuer/fill
+    # reconciliation path, including partial/mixed batch outcomes.
     ack_by_id = {
         int(event.exchange_order_id): event
         for event in events
