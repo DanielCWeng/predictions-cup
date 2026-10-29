@@ -840,6 +840,38 @@ def _portfolio_fill_rows(
     )
 
 
+def _ack_proves_no_execution(event: object) -> bool:
+    """SIG acknowledged the intent but explicitly created no order or fill.
+
+    A missing order ID by itself is *not* proof. Only the complete terminal
+    zero-execution tuple from the persisted issuer ACK qualifies.
+    """
+    raw = getattr(event, "detail_json", None)
+    if not isinstance(raw, str):
+        return False
+    try:
+        detail = json.loads(raw)
+        if not isinstance(detail, dict):
+            return False
+        if (
+            "orderId" not in detail
+            or detail["orderId"] is not None
+            or detail.get("open") is not False
+            or detail.get("fillPrice") is not None
+            or getattr(event, "exchange_order_id", None) is not None
+            or not getattr(event, "exchange_id", None)
+        ):
+            return False
+        return all(
+            key in detail
+            and not isinstance(detail[key], bool)
+            and Decimal(str(detail[key])) == 0
+            for key in ("remainingQuantity", "quantityTraded", "totalCost")
+        )
+    except (ValueError, TypeError, ArithmeticError):
+        return False
+
+
 def _reconcile_bulk_placement(
     *,
     journal: ExecutionJournal,
@@ -854,9 +886,43 @@ def _reconcile_bulk_placement(
     clock_ns: ClockNs,
 ) -> None:
     order_ids = _acknowledged_order_ids(journal, envelope.logical_operation_id)
-    if not order_ids or fills is None:
+    if fills is None or not snapshot_available:
         return
     events = journal.events(envelope.logical_operation_id)
+    # Every submitted intent must be accounted for. SIG can ACK an outcome
+    # without creating an order: orderId=null, open=false, remaining=0,
+    # traded=0, cost=0. Such an ACK is terminal only if ALL fields prove it.
+    # Other no-ID ACKs stay unresolved; never infer closure from absence.
+    if not envelope.intent_ids:
+        return
+    for intent_id in envelope.intent_ids:
+        matching = tuple(
+            event
+            for event in events
+            if event.logical_intent_id == intent_id
+            and event.event_type in {"ACK", "REJECTED"}
+        )
+        if not matching:
+            return
+        if any(
+            event.event_type == "ACK"
+            and event.exchange_order_id is not None
+            and event.exchange_order_id.isdigit()
+            for event in matching
+        ):
+            continue
+        if all(event.event_type == "REJECTED" for event in matching):
+            continue
+        if not all(
+            event.event_type == "ACK"
+            and _ack_proves_no_execution(event)
+            and event.exchange_id not in fills.incomplete_exchange_ids
+            for event in matching
+        ):
+            return
+    if not order_ids:
+        _record_terminal(journal, envelope, None, LifecycleState.RECONCILED)
+        return
     ack_by_id = {
         int(event.exchange_order_id): event
         for event in events
