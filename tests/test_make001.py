@@ -3467,9 +3467,15 @@ def test_recycle_never_keeps_oversize_or_uncertain_quote() -> None:
         side=QuoteSide.ASK, active_ticks=111, desired_ticks=110,
         remaining_size=101, desired_size=50, recycle_side=QuoteSide.ASK,
     )
-    assert [a for a in oversize if a.side is QuoteSide.ASK][0].kind is QuoteLifecycleActionKind.CANCEL
+    assert (
+        [a for a in oversize if a.side is QuoteSide.ASK][0].kind
+        is QuoteLifecycleActionKind.CANCEL
+    )
     uncertain = _recycle_quote_decision(
         side=QuoteSide.ASK, active_ticks=111, desired_ticks=110,
         state=LifecycleState.UNCERTAIN, recycle_side=QuoteSide.ASK,
     )
-    assert [a for a in uncertain if a.side is QuoteSide.ASK][0].kind is QuoteLifecycleActionKind.WAIT_RECONCILIATION
+    assert (
+        [a for a in uncertain if a.side is QuoteSide.ASK][0].kind
+        is QuoteLifecycleActionKind.WAIT_RECONCILIATION
+    )
