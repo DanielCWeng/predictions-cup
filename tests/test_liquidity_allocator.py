@@ -368,3 +368,56 @@ def test_full_depth_large_exit_is_not_hidden_by_25_shallow_touches() -> None:
     assert ranked[0].assessment.shares == 500
     assert ranked[0].gain_susq == pytest.approx(185.0)
     assert allocator.last_rank_diagnostic["gain_hurdle"] == 100
+
+
+def test_passive_recycle_targets_held_yes_without_any_entry_candidate() -> None:
+    a = LiquidityWeightedAllocator(advisory_include_resting_orders=True)
+    held = (
+        RuntimePosition("11", "m11", "t1", 1000, 1000),
+        RuntimePosition("22", "m22", "t1", 1000, -1000),
+    )
+    a.observe(snapshot(
+        eid="11", market="m11", signed=1000,
+        pm_bid=.80, pm_ask=.82, yes_bid=100, yes_ask=164,
+        open_order=True, all_positions=held,
+    ), "token-11")
+    # Identical account order book is needed for allocator fingerprint to
+    # represent a coherent account snapshot.
+    a.observe(snapshot(
+        eid="22", market="m22", signed=-1000,
+        pm_bid=.80, pm_ask=.82, yes_bid=100, yes_ask=164,
+        all_positions=held,
+    ), "token-22")
+    assert a.entries == {}
+    assert set(a.exits) == {"11", "22"}
+    assert a.passive_recycle_targets(now_ns=30_000_000_000) == frozenset({"11"})
+    assert a.rank(now_ns=30_000_000_000) == ()
+
+
+def test_passive_recycle_requires_live_fresh_trusted_exit_depth() -> None:
+    a = LiquidityWeightedAllocator(advisory_include_resting_orders=True)
+    first = snapshot(eid="11", signed=1000, pm_bid=.80, pm_ask=.82,
+                     yes_bid=100, yes_ask=164, open_order=True)
+    a.observe(first, "token-11")
+    assert a.passive_recycle_targets(now_ns=first.now_monotonic_ns) == frozenset({"11"})
+    stale = replace(first, sig_depth_observed_ns=first.now_monotonic_ns - 20_000_000_000)
+    a.observe(stale, "token-11")
+    assert a.passive_recycle_targets(now_ns=first.now_monotonic_ns) == frozenset()
+    a.observe(first, "token-11", risk_state_trusted=False)
+    assert a.passive_recycle_targets(now_ns=first.now_monotonic_ns) == frozenset()
+    with pytest.raises(ValueError):
+        a.passive_recycle_targets(now_ns=first.now_monotonic_ns, limit=9)
+
+
+def test_passive_recycling_bounded_to_eight_and_skips_no_inventory() -> None:
+    a = LiquidityWeightedAllocator()
+    held = tuple(RuntimePosition(str(i), "m"+str(i), "t1", 1000, 1000)
+                 for i in range(11, 22))
+    for i in range(11, 22):
+        a.observe(snapshot(
+            eid=str(i), market="m"+str(i), signed=1000,
+            pm_bid=.80, pm_ask=.82, yes_bid=100, yes_ask=164,
+            all_positions=held,
+        ), "token-"+str(i))
+    assert len(a.passive_recycle_targets(now_ns=30_000_000_000)) == 8
+    assert len(a.exits) == 11
