@@ -594,7 +594,10 @@ def _reconciled_cancelled_order() -> AccountProxyLedger:
     )
     # This executes exactly the proxy's journal CANCEL_ACK branch.
     ledger._apply_journal_event(  # type: ignore[arg-type]
-        SimpleNamespace(event_type="CANCEL_ACK", exchange_order_id="101")
+        SimpleNamespace(
+            event_type="CANCEL_ACK", exchange_order_id="101",
+            logical_operation_id="cancel-op", logical_intent_id=None,
+        )
     )
     old = ledger.runtime_portfolio(
         account_state_trusted=False, now_monotonic_ns=1_100,
@@ -618,6 +621,7 @@ def test_cancelled_zero_fill_late_close_does_not_poison_account() -> None:
     ledger._apply_journal_event(  # type: ignore[arg-type]
         SimpleNamespace(
             event_type="REALTIME_ORDER_UPDATE",
+            logical_operation_id="place-op", logical_intent_id=None,
             exchange_order_id="101",
             exchange_id=EXCHANGE,
             terminal_status="CLOSED",
@@ -662,6 +666,7 @@ def test_cancelled_late_close_journal_nonzero_economics_fails_closed() -> None:
     ledger._apply_journal_event(  # type: ignore[arg-type]
         SimpleNamespace(
             event_type="REALTIME_ORDER_UPDATE",
+            logical_operation_id="place-op", logical_intent_id=None,
             exchange_order_id="101",
             exchange_id=EXCHANGE,
             terminal_status="CLOSED",
