@@ -455,6 +455,39 @@ class LiquidityWeightedAllocator:
             ):
                 del self.exits[eid]
 
+    def passive_recycle_targets(
+        self, *, now_ns: int, limit: int = 8,
+    ) -> frozenset[str]:
+        """Select only existing YES holdings for non-crossing reduction quotes.
+
+        This is a maker quote-side preference, not a sell order, a taker
+        permission, or a claim of executable liquidation proceeds. Prefer
+        cash-releasing YES reductions over NO-cover bids (which require cash).
+        No replacement entry is required: the normal maker still prices each
+        resting ASK independently and RISK-002 approves/cancels it.
+        """
+        if limit < 1 or limit > 8:
+            raise ValueError("passive recycling must be bounded to 1..8")
+        self._expire(now_ns)
+        candidates: list[tuple[float, int, str]] = []
+        for eid, held in self.exits.items():
+            # An NO cover is a BUY YES and consumes scarce cash. Do not
+            # nominate it as a capital-releasing quote.
+            if held.signed_shares <= 0 or not held.yes_bids:
+                continue
+            bid = held.yes_bids[0]
+            if bid.shares < 1:
+                continue
+            # Prefer liquid sizeable holdings where SIG bids are closest to
+            # conservative external value. The maker's separate ASK price,
+            # maker edge checks and central risk still determine actual orders.
+            concession = max(0.0, held.conservative_fair_yes - bid.yes_price)
+            executable = min(held.signed_shares, bid.shares, self.max_trade_shares)
+            score = executable * max(0.0, bid.yes_price - concession)
+            candidates.append((score, executable, eid))
+        candidates.sort(key=lambda item: (-item[0], -item[1], item[2]))
+        return frozenset(eid for _, _, eid in candidates[:limit])
+
     def rank(self, *, now_ns: int | None = None, limit: int = 3) -> tuple[RankedRotation, ...]:
         if limit < 1:
             return ()
