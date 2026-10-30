@@ -218,7 +218,7 @@ def test_repair_precheck_refuses_aged_or_size_less_evidence() -> None:
 
 def test_proxy_input_has_finite_sig_touch_window_and_exact_book_identity() -> None:
     from predictions_cup.maker.residual_taker import residual_input_from_snapshot
-    from test_residual_taker_live import RECORD, NOW
+    from test_residual_taker_live import NOW, RECORD
     snapshot = _snapshot(ask=140, pm_bid=.77, pm_ask=.78)
     earlier = NOW - 4_000_000_000
     matching = replace(
