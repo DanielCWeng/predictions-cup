@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -583,3 +584,111 @@ def test_unknown_order_update_logs_identity_but_keeps_account_untrusted(
     assert "order=998877" in caplog.text
     assert f"exchange={EXCHANGE}" in caplog.text
     assert "open=False traded=0 total_cost=0" in caplog.text
+
+
+def _reconciled_cancelled_order() -> AccountProxyLedger:
+    """Simulate venue cancel ACK preceding a REST open-order read and late close."""
+    ledger = _ledger(max_age_ns=10_000)
+    ledger.seed_authoritative(
+        _snapshot(open_orders=(_open_order(),)), observed_monotonic_ns=1_000,
+    )
+    # This executes exactly the proxy's journal CANCEL_ACK branch.
+    ledger._apply_journal_event(  # type: ignore[arg-type]
+        SimpleNamespace(event_type="CANCEL_ACK", exchange_order_id="101")
+    )
+    old = ledger.runtime_portfolio(
+        account_state_trusted=False, now_monotonic_ns=1_100,
+    )
+    assert old.orders[0].uncertain
+    assert old.orders[0].reserved_exposure == 10
+    ledger.seed_authoritative(_snapshot(), observed_monotonic_ns=2_000)
+    assert ledger._recent_cancelled_orders["101"] == (EXCHANGE, MARKET)
+    return ledger
+
+
+def test_cancelled_zero_fill_late_close_does_not_poison_account() -> None:
+    ledger = _reconciled_cancelled_order()
+    batch = _batch(revision=1, quantity="0", total_cost="0")
+    batch["fills"] = []
+    updates = batch["orderUpdates"]
+    assert isinstance(updates, list)
+    assert isinstance(updates[0], dict)
+    updates[0]["open"] = False
+    ledger.apply_realtime_batch(batch)
+    ledger._apply_journal_event(  # type: ignore[arg-type]
+        SimpleNamespace(
+            event_type="REALTIME_ORDER_UPDATE",
+            exchange_order_id="101",
+            exchange_id=EXCHANGE,
+            terminal_status="CLOSED",
+            quantity="0",
+            detail_json='{"totalCost":"0"}',
+        )
+    )
+    assert ledger.discrepancy_reason is None
+    assert ledger.runtime_portfolio(
+        account_state_trusted=False, now_monotonic_ns=2_050,
+    ).trust_grade is AccountTrustGrade.PROXY
+
+
+@pytest.mark.parametrize("change", [
+    {"open": True},
+    {"quantityTraded": "1"},
+    {"totalCost": "1.00"},
+    {"marketId": "wrong_market"},
+    {"exchangeId": "other_exchange"},
+    {"orderId": 999},
+])
+def test_cancelled_late_close_requires_exact_zero_economics(
+    change: dict[str, object],
+) -> None:
+    ledger = _reconciled_cancelled_order()
+    batch = _batch(revision=1, quantity="0", total_cost="0")
+    batch["fills"] = []
+    updates = batch["orderUpdates"]
+    assert isinstance(updates, list)
+    assert isinstance(updates[0], dict)
+    updates[0]["open"] = False
+    updates[0].update(change)
+    ledger.apply_realtime_batch(batch)
+    assert ledger.discrepancy_reason == "order_update_for_unknown_order"
+    assert ledger.trust_grade(
+        account_state_trusted=False, proxy_age_ns=0,
+    ) is AccountTrustGrade.UNTRUSTED
+
+
+def test_cancelled_late_close_journal_nonzero_economics_fails_closed() -> None:
+    ledger = _reconciled_cancelled_order()
+    ledger._apply_journal_event(  # type: ignore[arg-type]
+        SimpleNamespace(
+            event_type="REALTIME_ORDER_UPDATE",
+            exchange_order_id="101",
+            exchange_id=EXCHANGE,
+            terminal_status="CLOSED",
+            quantity="1",
+            detail_json='{"totalCost":"0.40"}',
+        )
+    )
+    assert ledger.discrepancy_reason == "journal_order_update_identity_unavailable"
+
+
+def test_cancelled_order_cache_is_bounded() -> None:
+    ledger = _reconciled_cancelled_order()
+    ledger._recent_cancelled_orders.update({
+        f"past-{i}": (EXCHANGE, MARKET) for i in range(260)
+    })
+    ledger.seed_authoritative(_snapshot(), observed_monotonic_ns=3_000)
+    assert len(ledger._recent_cancelled_orders) <= 256
+    assert "past-0" not in ledger._recent_cancelled_orders
+
+
+def test_uncertain_unacknowledged_cancellation_not_eligible_for_late_close() -> None:
+    ledger = _ledger()
+    ledger.seed_authoritative(
+        _snapshot(open_orders=(_open_order(),)), observed_monotonic_ns=1_000,
+    )
+    order = ledger._orders["101"]
+    order.open = False
+    order.terminal_fill_unknown = True  # cancellation attempted, no ACK
+    ledger.seed_authoritative(_snapshot(), observed_monotonic_ns=2_000)
+    assert "101" not in ledger._recent_cancelled_orders
