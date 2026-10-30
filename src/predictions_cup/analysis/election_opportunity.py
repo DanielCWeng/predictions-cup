@@ -21,8 +21,8 @@ from predictions_cup.analysis.election_terminal import (
     ProbabilityView,
     SettlementScenario,
     TradePlan,
-    evaluate_trade_plans,
     _validate_inputs,
+    evaluate_trade_plans,
 )
 
 
@@ -162,7 +162,10 @@ def rank_opportunities(
     if not portfolio_complete:
         raise ValueError("complete authoritative inventory is required")
     current_markets = {h.market_id for h in holdings}
-    if not authoritative_position_market_ids or current_markets != authoritative_position_market_ids:
+    if (
+        not authoritative_position_market_ids
+        or current_markets != authoritative_position_market_ids
+    ):
         raise ValueError("inventory differs from authoritative account market IDs")
     if len({c.identifier for c in candidates}) != len(candidates):
         raise ValueError("duplicate candidate identifier")
