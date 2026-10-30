@@ -26,6 +26,8 @@ from predictions_cup.sig.realtime_models import (
 
 logger = logging.getLogger(__name__)
 _BLOCKING_JOURNAL_STATES = {"PENDING", "UNCERTAIN", "RECONCILING", "CANCEL_PENDING"}
+# Identity evidence only; entries never represent executable orders or cash.
+_MAX_VERIFIED_CANCEL_IDENTITIES = 256
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +74,7 @@ class _ProxyOrder:
     cumulative_cash_delta: Decimal | None = None
     individual_fill_events: dict[str, tuple[Decimal, Decimal | None]] | None = None
     cash_applied: Decimal = Decimal("0")
+    cancel_acknowledged: bool = False
 
 
 class AccountProxyLedger:
@@ -110,6 +113,7 @@ class AccountProxyLedger:
         self.last_diff: AccountProxyDiff | None = None
         self._positions: dict[str, tuple[str, Decimal]] = {}
         self._orders: dict[str, _ProxyOrder] = {}
+        self._recent_cancelled_orders: dict[str, tuple[str, str]] = {}
         self._pending_intents: dict[tuple[str, str], _Intent] = {}
         self._journal_event_cursor = 0
         self._seen_fill_keys: set[str] = set()
@@ -209,6 +213,26 @@ class AccountProxyLedger:
             prior_order.open = False
             prior_order.terminal_fill_unknown = True
             self._orders[order_id] = prior_order
+        # A cancelled order can disappear from REST's open-order snapshot
+        # before its delayed realtime CLOSED event arrives. Retain only its
+        # verified local ID + instrument identity for checking that later
+        # zero-fill notice, never as an account or inventory reservation.
+        for order_id, prior in prior_orders.items():
+            if (
+                order_id not in self._orders
+                and prior.cancel_acknowledged
+                and not prior.open
+                and prior.filled_after_snapshot == 0
+                and prior.cumulative_fill_qty == 0
+                and prior.cash_applied == 0
+            ):
+                self._recent_cancelled_orders[order_id] = (
+                    prior.intent.exchange_id, prior.intent.market_id
+                )
+        for order_id in self._orders:
+            self._recent_cancelled_orders.pop(order_id, None)
+        while len(self._recent_cancelled_orders) > _MAX_VERIFIED_CANCEL_IDENTITIES:
+            self._recent_cancelled_orders.pop(next(iter(self._recent_cancelled_orders)))
         # In-flight local submissions remain risk-bearing if the account read
         # raced their response. The controller retries when the journal changes
         # during a read; this carry also covers an operation already in flight at
@@ -302,6 +326,15 @@ class AccountProxyLedger:
                 continue
             order = self._orders.get(str(update.order_id))
             if order is None:
+                if self._is_redundant_cancel_close(
+                    order_id=str(update.order_id),
+                    exchange_id=update.exchange_id,
+                    market_id=update.market_id,
+                    is_closed=not update.open,
+                    traded=update.quantity_traded,
+                    total_cost=update.total_cost,
+                ):
+                    continue
                 logger.warning(
                     "SIG account unknown update order=%s exchange=%s market=%s "
                     "open=%s traded=%s total_cost=%s",
@@ -465,6 +498,7 @@ class AccountProxyLedger:
             if isinstance(details.get("open"), bool):
                 ack_order.open = bool(details["open"])
             self._orders[event.exchange_order_id] = ack_order
+            self._recent_cancelled_orders.pop(event.exchange_order_id, None)
             self._pending_intents.pop(key, None)
             traded = _decimal(details.get("quantityTraded"))
             if traded is None and event.quantity is not None:
@@ -514,6 +548,18 @@ class AccountProxyLedger:
             update_order = self._known_order(event.exchange_order_id)
             quantity = _decimal(event.quantity)
             if update_order is None or quantity is None:
+                if (
+                    quantity is not None
+                    and self._is_redundant_cancel_close(
+                        order_id=event.exchange_order_id,
+                        exchange_id=event.exchange_id,
+                        market_id=None,
+                        is_closed=event.terminal_status == "CLOSED",
+                        traded=quantity,
+                        total_cost=_decimal(_json_object(event.detail_json).get("totalCost")),
+                    )
+                ):
+                    return
                 logger.warning(
                     "SIG journal unknown update order=%s exchange=%s "
                     "status=%s quantity=%s",
@@ -544,6 +590,7 @@ class AccountProxyLedger:
             if cancelled_order is not None:
                 cancelled_order.open = False
                 cancelled_order.terminal_fill_unknown = True
+                cancelled_order.cancel_acknowledged = True
 
     def _apply_cumulative_fill(
         self,
@@ -778,6 +825,31 @@ class AccountProxyLedger:
             self._positions.pop(intent.exchange_id, None)
         else:
             self._positions[intent.exchange_id] = (intent.market_id, updated)
+
+    def _is_redundant_cancel_close(
+        self,
+        *,
+        order_id: str | None,
+        exchange_id: str | None,
+        market_id: str | None,
+        is_closed: bool,
+        traded: Decimal,
+        total_cost: Decimal | None,
+    ) -> bool:
+        """Only suppress a previously ACKed cancel's matching zero-fill close.
+
+        A new OPEN, unexpected instrument, any fill/cost, or unknown ID still
+        causes normal discrepancy/reconciliation. This does NOT acknowledge
+        the original cancellation or release uncertain risk reservations.
+        """
+        if order_id is None or not is_closed or traded != 0 or total_cost != 0:
+            return False
+        identity = self._recent_cancelled_orders.get(order_id)
+        return (
+            identity is not None
+            and exchange_id == identity[0]
+            and (market_id is None or market_id == identity[1])
+        )
 
     def _known_order(self, order_id: str | None) -> _ProxyOrder | None:
         if order_id is None:
