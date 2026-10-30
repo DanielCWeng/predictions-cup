@@ -19,7 +19,6 @@ from predictions_cup.analysis.election_terminal import (
     SettlementScenario,
 )
 
-
 NOW = datetime(2026, 10, 30, 15, 0, tzinfo=UTC)
 SCENARIOS = (
     SettlementScenario("swing", {"a": False, "b": True}),
