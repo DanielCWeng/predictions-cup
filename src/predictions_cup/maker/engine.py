@@ -26,7 +26,7 @@ from predictions_cup.maker.contracts import (
     ToxicityProvider,
 )
 from predictions_cup.maker.policies import with_quote_math
-from predictions_cup.runtime.models import AccountTrustGrade, SIG_TICK
+from predictions_cup.runtime.models import SIG_TICK, AccountTrustGrade
 
 _TICK = float(SIG_TICK)
 # Fill-seeking shrinks risk-increasing size once projected inventory passes
