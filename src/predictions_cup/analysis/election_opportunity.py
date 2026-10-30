@@ -43,6 +43,7 @@ class Opportunity:
     best_outcome_delta: float
     max_initial_cash_required: float
     capital_released_by_exits: float
+    milestone_probability_improvement: dict[str, float]
 
     def as_document(self) -> dict[str, object]:
         return {
@@ -58,6 +59,7 @@ class Opportunity:
             "remaining_cash": self.score.remaining_cash,
             "max_initial_cash_required": self.max_initial_cash_required,
             "capital_released_by_exits": self.capital_released_by_exits,
+            "milestone_probability_improvement": self.milestone_probability_improvement,
         }
 
 
@@ -139,6 +141,7 @@ def rank_opportunities(
     min_robust_gain: float = 0.0,
     max_candidates: int = 40,
     max_results: int = 15,
+    milestone_targets: tuple[tuple[int, float], ...] = (),
 ) -> OpportunityReport:
     """Evaluate all singles and sale-first, two-leg funded rotations.
 
@@ -167,6 +170,15 @@ def rank_opportunities(
         or current_markets != authoritative_position_market_ids
     ):
         raise ValueError("inventory differs from authoritative account market IDs")
+    if (
+        len({rank for rank, _ in milestone_targets}) != len(milestone_targets)
+        or any(
+            type(rank) is not int or rank < 1
+            or not math.isfinite(balance) or balance < 0
+            for rank, balance in milestone_targets
+        )
+    ):
+        raise ValueError("invalid leaderboard milestone targets")
     if len({c.identifier for c in candidates}) != len(candidates):
         raise ValueError("duplicate candidate identifier")
     if len(candidates) > max_candidates:
@@ -221,6 +233,12 @@ def rank_opportunities(
                 exit_candidate.trade, entry.trade,
             ))))
 
+    baseline = {
+        scenario.name: cash + sum(
+            h.yes_shares if scenario.resolves_yes[h.market_id] else h.no_shares
+            for h in holdings
+        ) for scenario in scenarios
+    }
     ranked: list[Opportunity] = []
     for ids, plan in proposals:
         try:
@@ -243,15 +261,34 @@ def rank_opportunities(
             continue
         outcomes = [_scenario_gain(plan, scenario) for scenario in scenarios]
         cash_needed, proceeds = _cash_path(plan, cash)
+        deltas = dict(zip(
+            (scenario.name for scenario in scenarios), outcomes, strict=True,
+        ))
+        improvements: dict[str, float] = {}
+        for rank, threshold in milestone_targets:
+            improvements[str(rank)] = min(
+                sum(
+                    view.probabilities[name]
+                    * (
+                        float(baseline[name] + deltas[name] > threshold)
+                        - float(baseline[name] > threshold)
+                    )
+                    for name in baseline
+                )
+                for view in probability_views
+            )
         ranked.append(Opportunity(
             name=plan.name, constituent_ids=ids, score=score,
             worst_outcome_delta=min(outcomes),
             best_outcome_delta=max(outcomes),
             max_initial_cash_required=cash_needed,
             capital_released_by_exits=proceeds,
+            milestone_probability_improvement=improvements,
         ))
     ranked.sort(key=lambda item: (
         item.score.min_probability_improvement,
+        *(item.milestone_probability_improvement[str(rank)]
+          for rank, _ in sorted(milestone_targets)),
         item.score.min_expected_gain,
         item.worst_outcome_delta,
         -item.max_initial_cash_required,
