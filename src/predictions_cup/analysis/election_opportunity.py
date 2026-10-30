@@ -136,7 +136,7 @@ def rank_opportunities(
     authoritative_position_market_ids: frozenset[str],
     portfolio_complete: bool,
     account_reconciled: bool,
-    uncertain_order_exposure: float,
+    uncertain_order_exposure: float | None,
     max_quote_age_seconds: float = 15.0,
     min_robust_gain: float = 0.0,
     max_candidates: int = 40,
@@ -156,8 +156,13 @@ def rank_opportunities(
         not math.isfinite(max_quote_age_seconds)
         or not 0 < max_quote_age_seconds <= 120
         or not math.isfinite(min_robust_gain)
-        or not math.isfinite(uncertain_order_exposure)
-        or uncertain_order_exposure < 0
+        or (
+            uncertain_order_exposure is not None
+            and (
+                not math.isfinite(uncertain_order_exposure)
+                or uncertain_order_exposure < 0
+            )
+        )
         or not 1 <= max_candidates <= 100
         or not 1 <= max_results <= 100
     ):
@@ -297,7 +302,11 @@ def rank_opportunities(
         ranked=tuple(ranked[:max_results]),
         rejected=dict(sorted(refused.items())),
         plans_evaluated=len(proposals),
-        inputs_trusted=account_reconciled and uncertain_order_exposure == 0,
+        inputs_trusted=(
+            account_reconciled
+            and uncertain_order_exposure is not None
+            and uncertain_order_exposure == 0
+        ),
     )
 
 
