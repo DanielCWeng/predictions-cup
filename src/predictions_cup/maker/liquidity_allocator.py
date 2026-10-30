@@ -134,6 +134,11 @@ class LiquidityWeightedAllocator:
         self.diagnostic_counts: Counter[str] = Counter()
         self.latest_eligibility: dict[str, tuple[int, str]] = {}
         self.last_rank_diagnostic: dict[str, float | int | str | None] = {}
+        # Quote targets are advisory, never an execution licence. A small
+        # incumbent preference prevents churn when equally good fresh exits
+        # alternate around the eight-market shortlist cutoff.
+        self._passive_targets: frozenset[str] = frozenset()
+        self.passive_target_changes = 0
 
     def _diagnose(self, eid: str, observed_ns: int, reason: str) -> None:
         self.diagnostic_counts[reason] += 1
@@ -151,6 +156,8 @@ class LiquidityWeightedAllocator:
             "total_observations": self.observed,
             "total_reasons": dict(self.diagnostic_counts.most_common(12)),
             "rank": dict(self.last_rank_diagnostic),
+            "passive_target_count": len(self._passive_targets),
+            "passive_target_changes": self.passive_target_changes,
         }
 
     def observe(
@@ -489,9 +496,19 @@ class LiquidityWeightedAllocator:
             concession = max(0.0, fair_hold - proceeds)
             score = executable * max(0.0, proceeds - concession)
             if score > 0:
-                candidates.append((score, executable, eid))
+                # A currently selected market keeps its place when a challenger
+            # offers only a marginally better score. Both must be CURRENTLY
+            # eligible: stale / untrusted / non-held markets are never retained.
+            # This changes quote-side preference only, not the fair-value,
+            # execution-depth, account, order, or central-RISK checks.
+            priority = score * (1.10 if eid in self._passive_targets else 1.0)
+            candidates.append((priority, executable, eid))
         candidates.sort(key=lambda item: (-item[0], -item[1], item[2]))
-        return frozenset(eid for _, _, eid in candidates[:limit])
+        selected = frozenset(eid for _, _, eid in candidates[:limit])
+        if selected != self._passive_targets:
+            self.passive_target_changes += 1
+            self._passive_targets = selected
+        return selected
 
     def rank(self, *, now_ns: int | None = None, limit: int = 3) -> tuple[RankedRotation, ...]:
         if limit < 1:
