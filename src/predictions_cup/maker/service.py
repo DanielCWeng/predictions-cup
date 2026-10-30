@@ -955,6 +955,17 @@ class MakerService:
                     request_rotation_recheck=lambda ids: (
                         runtime.notify_sig(ids) if runtime is not None else None
                     ),
+                    rotation_cached_sweep=lambda ids, observed_ns: (
+                        taker.observe_rotation_cached_batch(
+                            bridge.build_many(
+                                ids,
+                                wall_now=datetime.now(UTC),
+                                monotonic_now_ns=observed_ns,
+                                polymarket_feed_trusted=self._polymarket_feed_trusted(),
+                            )
+                        )
+                        if taker is not None else None
+                    ),
                 )
                 _LOG.info(
                     "TAKE depth freshness REST_ms=%d corroborated_stream_ms=%d "

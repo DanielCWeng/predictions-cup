@@ -164,6 +164,7 @@ class ResidualTakerLiveCoordinator:
         rotation_reduce_only_targets: Callable[[frozenset[str], int], None] | None = None,
         active_rotation_exits: bool = False,
         request_rotation_recheck: Callable[[frozenset[str]], None] | None = None,
+        rotation_cached_sweep: Callable[[frozenset[str], int], None] | None = None,
         rotation_capacity_priority: Callable[[bool, int], None] | None = None,
         rotation_capacity_priority_enabled: bool = True,
     ) -> None:
@@ -214,6 +215,7 @@ class ResidualTakerLiveCoordinator:
         self._rotation_reduce_only_targets = rotation_reduce_only_targets
         self._active_rotation_exits = active_rotation_exits
         self._request_rotation_recheck = request_rotation_recheck
+        self._rotation_cached_sweep = rotation_cached_sweep
         self._rotation_pending: dict[str, tuple[RankedRotation, int]] = {}
         self._rotation_last_request_ns: dict[str, int] = {}
         self._rotation_last_exit_ns: dict[str, int] = {}
@@ -408,6 +410,47 @@ class ResidualTakerLiveCoordinator:
             if self._request_rotation_recheck is not None and bounded:
                 self._request_rotation_recheck(bounded)
 
+    def observe_rotation_cached_batch(
+        self, snapshots: Mapping[str, MakerMarketSnapshot],
+    ) -> None:
+        """Observe one consistent cached-source cohort without maker dispatch.
+
+        This is deliberately not an execution callback: no cancellations, quote
+        pauses, fresh-depth REST calls, pending orders or order sends occur here.
+        The normal one-market LIVE path independently admits and revalidates
+        any candidate on a subsequent original decision cycle.
+        """
+        allocator = self._rotation_allocator
+        if allocator is None or not self._active_rotation_exits or not snapshots:
+            return
+        risk = (
+            self._risk_context_source()
+            if callable(self._risk_context_source)
+            else self._risk_context_source
+        )
+        capital = risk.capital_state
+        risk_ready = bool(
+            not risk.kill_switch
+            and not self._kill_switch.active
+            and capital is not None
+            and capital.account_trusted
+            and capital.reconciliation_complete
+            and capital.marks_trusted
+            and capital.exposure.trusted
+            and capital.exposure.uncertain_order_exposure == 0
+            and not (capital.global_halt is not None and capital.global_halt.active)
+        )
+        for eid in sorted(snapshots):
+            if eid not in self._signal.tracked_exchange_ids:
+                continue
+            snapshot = snapshots[eid]
+            token = rotation_mapped_token(self._mapping.get(eid))
+            allocator.observe(snapshot, token, risk_state_trusted=risk_ready)
+            if self._rotation_preclear_allocator is not None:
+                self._rotation_preclear_allocator.observe(
+                    snapshot, token, risk_state_trusted=risk_ready,
+                )
+
     def _schedule_rotation_coordinated_recheck(
         self, *, trusted: bool, now_ns: int,
     ) -> None:
@@ -419,10 +462,11 @@ class ResidualTakerLiveCoordinator:
         before two asynchronously updated markets can be compared.
         """
         allocator = self._rotation_allocator
+        sweep = getattr(self, "_rotation_cached_sweep", None)
         request = self._request_rotation_recheck
         if (
             not trusted or not self._active_rotation_exits
-            or allocator is None or request is None
+            or allocator is None or (sweep is None and request is None)
             or (allocator.entries and allocator.exits)
         ):
             return
@@ -436,13 +480,19 @@ class ResidualTakerLiveCoordinator:
         ids = frozenset(sorted(self._signal.tracked_exchange_ids)[:256])
         if not ids:
             return
-        request(ids)
+        if sweep is not None:
+            # One bounded synchronous bridge read, never the paced maker queue.
+            sweep(ids, now_ns)
+        else:
+            assert request is not None
+            request(ids)
         self._rotation_coordinated_rechecks += 1
         _LOG.info(
             "ROTATION coordinated cached-source recheck=%d markets=%d "
-            "strict_entries=%d strict_exits=%d REST_CALLS=0",
+            "mode=%s strict_entries=%d strict_exits=%d REST_CALLS=0",
             self._rotation_coordinated_rechecks,
-            len(ids), len(allocator.entries), len(allocator.exits),
+            len(ids), "atomic" if sweep is not None else "paced",
+            len(allocator.entries), len(allocator.exits),
         )
 
     def _capture_rotation(
