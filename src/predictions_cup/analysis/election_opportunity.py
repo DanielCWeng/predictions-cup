@@ -22,6 +22,7 @@ from predictions_cup.analysis.election_terminal import (
     SettlementScenario,
     TradePlan,
     evaluate_trade_plans,
+    _validate_inputs,
 )
 
 
@@ -168,21 +169,8 @@ def rank_opportunities(
     if len(candidates) > max_candidates:
         raise ValueError("candidate search bound exceeded")
 
-    # Validate scenarios, models and entire portfolio even when no market
-    # passes the quote filters: an invalid input cannot yield recommendations.
-    evaluate_trade_plans(
-        scenarios=scenarios, probability_views=probability_views,
-        holdings=holdings, cash=cash, target_balance=target_balance,
-        plans=(TradePlan("validation", (
-            ExecutableTrade(
-                market_id=next(iter(scenarios[0].resolves_yes)),
-                action="BUY", side="YES", quantity=1,
-                executable_price=.5, displayed_shares=1,
-            ),
-        )),),
-    ) if cash >= .5 else _validate_with_no_cash(
-        scenarios, probability_views, holdings, cash, target_balance,
-    )
+    # Validate the entire universe even when no quote passes the filters.
+    _validate_inputs(scenarios, probability_views, holdings, cash, target_balance)
 
     refused: Counter[str] = Counter()
     fresh: list[CandidateQuote] = []
@@ -273,16 +261,3 @@ def rank_opportunities(
     )
 
 
-def _validate_with_no_cash(
-    scenarios: tuple[SettlementScenario, ...],
-    probability_views: tuple[ProbabilityView, ...],
-    holdings: tuple[Holding, ...],
-    cash: float,
-    target_balance: float,
-) -> None:
-    # The existing terminal validator does not expose a no-trade plan.
-    # Use a one-share covered sale if possible, else validate by calling
-    # its common input validator (pure, with no dependence on quote data).
-    from predictions_cup.analysis.election_terminal import _validate_inputs
-
-    _validate_inputs(scenarios, probability_views, holdings, cash, target_balance)
