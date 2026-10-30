@@ -152,3 +152,99 @@ def test_precheck_bbo_ttl_is_independent_of_depth_ttl() -> None:
         old_bbo, cast(ResidualSignal, SimpleNamespace(quantity=50, direction="BUY")),
         action=OrderAction.BUY)
     assert score is not None and score > 0
+
+
+def test_stale_bbo_can_request_repair_but_cannot_execute_with_stale_depth() -> None:
+    from test_residual_taker_live import NOW
+    age_ns = 4_000_000_000
+    h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
+    requested: list[tuple[str, float]] = []
+    h.coordinator._request_fresh_depth = (
+        lambda eid, score: requested.append((eid, score))
+    )
+    fresh = _snapshot(ask=140, pm_bid=.77, pm_ask=.78)
+    old_book = replace(
+        fresh.runtime.books[0], observed_monotonic_ns=NOW-age_ns,
+    )
+    snapshot = replace(
+        fresh,
+        runtime=replace(fresh.runtime, books=(old_book,)),
+        sig_bbo_observed_ns=NOW-age_ns,
+        sig_depth_observed_ns=NOW-age_ns,
+        sig_stream_depth_corroborated=False,
+    )
+    score = h.coordinator._candidate_refresh_score(
+        snapshot,
+        cast(ResidualSignal, SimpleNamespace(quantity=30, direction="BUY")),
+        action=OrderAction.BUY,
+    )
+    assert score is not None and score > 0
+    h.run(snapshot)
+    assert requested and requested[0][1] > 0
+    assert not h.plans
+    assert h.coordinator._attempted_orders == 0
+
+
+def test_repair_precheck_refuses_aged_or_size_less_evidence() -> None:
+    from test_residual_taker_live import NOW
+    h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
+    h.coordinator._max_sig_stream_depth_age_ns = 5_000_000_000
+    signal = cast(ResidualSignal, SimpleNamespace(quantity=50, direction="BUY"))
+    good = _snapshot(ask=140, pm_bid=.77, pm_ask=.78)
+    full_score = h.coordinator._candidate_refresh_score(
+        good, signal, action=OrderAction.BUY,
+    )
+    assert full_score is not None
+    small = replace(good, external_quotes={
+        TOKEN: replace(good.external_quotes[TOKEN], best_bid_size=3.0),
+    })
+    capped = h.coordinator._candidate_refresh_score(
+        small, signal, action=OrderAction.BUY,
+    )
+    assert capped is not None and capped == full_score * 3 / 50
+    empty = replace(good, external_quotes={
+        TOKEN: replace(good.external_quotes[TOKEN], best_bid_size=0.5),
+    })
+    assert h.coordinator._candidate_refresh_score(
+        empty, signal, action=OrderAction.BUY,
+    ) is None
+    stale = replace(
+        good, sig_bbo_observed_ns=NOW - 6_000_000_000,
+    )
+    assert h.coordinator._candidate_refresh_score(
+        stale, signal, action=OrderAction.BUY,
+    ) is None
+
+
+def test_proxy_input_has_finite_sig_touch_window_and_exact_book_identity() -> None:
+    from predictions_cup.maker.residual_taker import residual_input_from_snapshot
+    from test_residual_taker_live import RECORD, NOW
+    snapshot = _snapshot(ask=140, pm_bid=.77, pm_ask=.78)
+    earlier = NOW - 4_000_000_000
+    matching = replace(
+        snapshot,
+        sig_bbo_observed_ns=earlier,
+        runtime=replace(snapshot.runtime, books=(
+            replace(snapshot.runtime.books[0], observed_monotonic_ns=earlier),
+        )),
+    )
+    def make_state(age_bound: int):
+        return residual_input_from_snapshot(
+            matching, RECORD,
+            max_pm_book_age_ns=35_000_000_000,
+            observed_monotonic_ns=NOW,
+            allow_bbo_proxy=True,
+            max_proxy_bbo_age_ns=age_bound,
+        )
+    assert make_state(15_000_000_000) is not None
+    assert make_state(3_000_000_000) is None
+    mismatch = replace(
+        matching, runtime=snapshot.runtime,
+    )
+    assert residual_input_from_snapshot(
+        mismatch, RECORD,
+        max_pm_book_age_ns=35_000_000_000,
+        observed_monotonic_ns=NOW,
+        allow_bbo_proxy=True,
+        max_proxy_bbo_age_ns=15_000_000_000,
+    ) is None
