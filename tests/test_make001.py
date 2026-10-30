@@ -47,6 +47,7 @@ from predictions_cup.maker import (
 )
 from predictions_cup.maker import adapters as maker_adapters_module
 from predictions_cup.maker.contracts import FairValueResult
+from predictions_cup.maker.lifecycle import QuoteLifecycleAction
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import (
@@ -3374,3 +3375,108 @@ def test_pending_rotation_capacity_priority_reduces_maker_quotes_then_expires() 
     engine.set_rotation_entry_priority(True, observed_ns=NOW)
     engine.set_rotation_entry_priority(False, observed_ns=NOW)
     assert engine.quote(held).gate.mode is GateMode.NORMAL
+
+
+def _recycle_quote_decision(
+    *, side: QuoteSide, active_ticks: int, desired_ticks: int | None,
+    remaining_size: int = 100, desired_size: int = 100,
+    force_cancel: bool = False, recycle_side: QuoteSide | None = None,
+    state: LifecycleState = LifecycleState.OPEN,
+) -> tuple[QuoteLifecycleAction, ...]:
+    from predictions_cup.maker.contracts import DesiredQuote
+    from predictions_cup.maker.lifecycle import MakerQuoteState
+
+    quote = ActiveQuote(
+        side=side, price_ticks=active_ticks, size=100,
+        remaining_size=remaining_size, logical_operation_id="test-reduce-op",
+        exchange_order_id=1234, lifecycle_state=state,
+        observed_monotonic_ns=NOW - 100_000_000,
+    )
+    current = MakerQuoteState(
+        exchange_id="36",
+        ask=quote if side is QuoteSide.ASK else None,
+        bid=quote if side is QuoteSide.BID else None,
+    )
+    desired = DesiredQuote(
+        "36", "market36", TOURNAMENT,
+        desired_ticks if side is QuoteSide.BID else None,
+        desired_ticks if side is QuoteSide.ASK else None,
+        desired_size if side is QuoteSide.BID and desired_ticks is not None else 0,
+        desired_size if side is QuoteSide.ASK and desired_ticks is not None else 0,
+    ) if desired_ticks is not None else None
+    return QuoteLifecycleManager().decide(
+        desired=desired, current=current, now_monotonic_ns=NOW,
+        force_cancel=force_cancel, recycle_side=recycle_side,
+    )
+
+
+@pytest.mark.parametrize(
+    ("side", "active", "wanted"),
+    [(QuoteSide.ASK, 113, 110), (QuoteSide.BID, 107, 110)],
+)
+def test_recycle_reducing_quote_keeps_nonworse_resting_price(
+    side: QuoteSide, active: int, wanted: int,
+) -> None:
+    actions = _recycle_quote_decision(
+        side=side, active_ticks=active, desired_ticks=wanted,
+        remaining_size=80, desired_size=100, recycle_side=side,
+    )
+    selected = [action for action in actions if action.side is side]
+    assert len(selected) == 1
+    assert selected[0].kind is QuoteLifecycleActionKind.KEEP
+    assert selected[0].reason == "recycle_non_worse_resting_quote"
+
+    normal = _recycle_quote_decision(
+        side=side, active_ticks=active, desired_ticks=wanted,
+    )
+    original = [action for action in normal if action.side is side]
+    assert original[0].kind is QuoteLifecycleActionKind.CANCEL
+
+
+@pytest.mark.parametrize(
+    ("side", "active", "wanted"),
+    [
+        (QuoteSide.ASK, 109, 110),
+        (QuoteSide.BID, 111, 110),
+        (QuoteSide.ASK, 114, 110),
+        (QuoteSide.BID, 106, 110),
+    ],
+)
+def test_recycle_never_keeps_worse_or_too_far_resting_quotes(
+    side: QuoteSide, active: int, wanted: int,
+) -> None:
+    actions = _recycle_quote_decision(
+        side=side, active_ticks=active, desired_ticks=wanted,
+        recycle_side=side,
+    )
+    selected = [action for action in actions if action.side is side]
+    assert selected[0].kind is QuoteLifecycleActionKind.CANCEL
+
+
+def test_recycle_still_cancels_on_force_or_no_desired() -> None:
+    for force_cancel, target in ((True, 110), (False, None)):
+        actions = _recycle_quote_decision(
+            side=QuoteSide.ASK, active_ticks=111, desired_ticks=target,
+            recycle_side=QuoteSide.ASK, force_cancel=force_cancel,
+        )
+        selected = [action for action in actions if action.side is QuoteSide.ASK]
+        assert selected[0].kind is QuoteLifecycleActionKind.CANCEL
+
+
+def test_recycle_never_keeps_oversize_or_uncertain_quote() -> None:
+    oversize = _recycle_quote_decision(
+        side=QuoteSide.ASK, active_ticks=111, desired_ticks=110,
+        remaining_size=101, desired_size=50, recycle_side=QuoteSide.ASK,
+    )
+    assert (
+        [a for a in oversize if a.side is QuoteSide.ASK][0].kind
+        is QuoteLifecycleActionKind.CANCEL
+    )
+    uncertain = _recycle_quote_decision(
+        side=QuoteSide.ASK, active_ticks=111, desired_ticks=110,
+        state=LifecycleState.UNCERTAIN, recycle_side=QuoteSide.ASK,
+    )
+    assert (
+        [a for a in uncertain if a.side is QuoteSide.ASK][0].kind
+        is QuoteLifecycleActionKind.WAIT_RECONCILIATION
+    )
