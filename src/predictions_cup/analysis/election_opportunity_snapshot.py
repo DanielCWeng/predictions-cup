@@ -60,7 +60,7 @@ def _full_holdings(
             by_market[position.market_id][0] += int(qty)
         else:
             by_market[position.market_id][1] += -int(qty)
-    holdings = [
+    holdings: list[dict[str, int | str]] = [
         {"market_id": market_id, "yes_shares": amounts[0], "no_shares": amounts[1]}
         for market_id, amounts in sorted(by_market.items())
     ]
