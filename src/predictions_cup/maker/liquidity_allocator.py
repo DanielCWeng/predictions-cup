@@ -369,6 +369,81 @@ class LiquidityWeightedAllocator:
             # Bound memory independently of heartbeat frequency.
             self._expire(now)
 
+    def stale_depth_entry_probe(
+        self, snapshot: MakerMarketSnapshot, mapped_token: str | None, *,
+        max_sig_bbo_age_ns: int,
+    ) -> float | None:
+        """Conservative BBO-only score for a *depth refresh*, never a trade.
+
+        Called only after the real allocator rejected this market for stale
+        or untrusted SIG depth. Uses fresh independently trusted SIG BBO and
+        PM reference quotes, the unchanged marginal net-edge floor, and
+        directional capacity. The fetched depth and risk are rechecked by the
+        normal execution path; this score confers no trading permission.
+        """
+        if mapped_token is None or max_sig_bbo_age_ns <= 0:
+            return None
+        now = snapshot.now_monotonic_ns
+        portfolio = snapshot.runtime.portfolio
+        if (
+            not portfolio.account_trusted
+            or portfolio.trust_grade is not AccountTrustGrade.TRUSTED
+            or portfolio.account_proxy_uncertainty != 0
+            or any(order.uncertain for order in portfolio.orders)
+            or any(order.open and order.exchange_id == snapshot.exchange_id
+                   for order in portfolio.orders)
+            or not snapshot.sig_bbo_trusted
+        ):
+            return None
+        bbo_age = now - snapshot.sig_bbo_observed_ns
+        if bbo_age < 0 or bbo_age >= max_sig_bbo_age_ns:
+            return None
+        book = snapshot.runtime.book(snapshot.exchange_id)
+        if book is None or not book.asks or not book.bids:
+            return None
+        quote = snapshot.external_quotes.get(mapped_token)
+        if quote is None or not quote.trusted:
+            return None
+        quote_age = now - quote.observed_monotonic_ns
+        if not 0 <= quote_age <= self.max_age_ns:
+            return None
+        if (
+            quote.best_bid is None or quote.best_ask is None
+            or not math.isfinite(quote.best_bid)
+            or not math.isfinite(quote.best_ask)
+            or quote.best_bid > quote.best_ask
+        ):
+            return None
+        bid = book.bids[0].price_ticks * SIG_TICK
+        ask = book.asks[0].price_ticks * SIG_TICK
+        if not 0 <= bid <= ask <= 1:
+            return None
+        low, high = portfolio.worst_case_inventory_bounds(
+            snapshot.exchange_id, snapshot.tournament_id,
+        )
+        scores: list[float] = []
+        for direction, fair, touch, reference_size in (
+            ("BUY", quote.best_bid, ask, quote.best_bid_size),
+            ("SELL", quote.best_ask, bid, quote.best_ask_size),
+        ):
+            if reference_size is None or not math.isfinite(reference_size):
+                continue
+            cap = min(self.max_trade_shares, math.floor(reference_size))
+            if self.max_position is not None:
+                room = (
+                    self.max_position - high if direction == "BUY"
+                    else self.max_position + low
+                )
+                cap = min(cap, math.floor(room))
+            if cap < 1:
+                continue
+            edge = (
+                (fair - touch) if direction == "BUY" else (touch - fair)
+            ) - self.entry_cushion - self.min_marginal_net_edge
+            if edge > 0:
+                scores.append(edge * cap)
+        return max(scores) if scores else None
+
     def _expire(self, now_ns: int) -> None:
         for eid, item in tuple(self.entries.items()):
             if now_ns < item.observed_ns or now_ns - item.observed_ns > self.max_age_ns:
