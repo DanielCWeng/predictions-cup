@@ -51,7 +51,7 @@ def _candidate(
 def _rank(
     candidates: tuple[CandidateQuote, ...],
     **overrides: object,
-):
+) -> OpportunityReport:
     parameters = dict(
         scenarios=SCENARIOS, probability_views=VIEWS,
         holdings=HOLDINGS, cash=0.0, target_balance=45.0,
