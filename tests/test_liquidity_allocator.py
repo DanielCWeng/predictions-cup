@@ -444,3 +444,61 @@ def test_passive_recycle_no_cover_has_realizable_redemption_value() -> None:
     assert allocator.passive_recycle_targets(now_ns=no_held.now_monotonic_ns) == frozenset()
     allocator.observe(no_held, "token-22", risk_state_trusted=False)
     assert allocator.passive_recycle_targets(now_ns=no_held.now_monotonic_ns) == frozenset()
+
+
+def test_passive_recycle_sticky_target_keeps_queue_priority_for_fresh_exit() -> None:
+    now = 30_000_000_000
+    a = LiquidityWeightedAllocator(max_trade_shares=100)
+    a.exits["11"] = RankedExit(
+        "11", "m11", 100, .51, now,
+        (BookLevel(.50, 100),), (),
+    )
+    assert a.passive_recycle_targets(now_ns=now, limit=1) == frozenset({"11"})
+    assert a.passive_target_changes == 1
+
+    # A modestly better candidate must not endlessly displace an incumbent
+    # passive quote and sacrifice queue priority.
+    a.exits["22"] = RankedExit(
+        "22", "m22", 100, .52, now,
+        (BookLevel(.51, 100),), (),
+    )
+    for _ in range(5):
+        assert a.passive_recycle_targets(now_ns=now, limit=1) == frozenset({"11"})
+    assert a.passive_target_changes == 1
+
+    # A materially better fresh candidate still wins immediately.
+    a.exits["22"] = RankedExit(
+        "22", "m22", 100, .75, now,
+        (BookLevel(.72, 100),), (),
+    )
+    assert a.passive_recycle_targets(now_ns=now, limit=1) == frozenset({"22"})
+    assert a.passive_target_changes == 2
+    report = a.eligibility_report(now)
+    assert report["passive_target_count"] == 1
+    assert report["passive_target_changes"] == 2
+
+
+def test_passive_recycle_stickiness_never_retains_stale_or_invalid_exit() -> None:
+    now = 30_000_000_000
+    a = LiquidityWeightedAllocator()
+    a.exits["11"] = RankedExit(
+        "11", "m11", -200, .8, now,
+        (), (BookLevel(.2, 100),),
+    )
+    assert a.passive_recycle_targets(now_ns=now) == frozenset({"11"})
+
+    # 5s stale: selected status must not confer an execution shortcut.
+    assert a.passive_recycle_targets(now_ns=now + 6_000_000_000) == frozenset()
+    assert a.passive_target_changes == 2
+    a.exits["11"] = RankedExit(
+        "11", "m11", -200, .8, now + 6_000_000_000,
+        (), (BookLevel(.2, 100),),
+    )
+    assert a.passive_recycle_targets(now_ns=now + 6_000_000_000) == (
+        frozenset({"11"})
+    )
+
+    # Validity loss from any account/risk update immediately clears the
+    # underlying executable-exit cache; no hysteresis overrides that.
+    a.exits.clear()
+    assert a.passive_recycle_targets(now_ns=now + 6_000_000_000) == frozenset()
