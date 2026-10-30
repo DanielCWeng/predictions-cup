@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 
 import pytest
@@ -21,6 +23,7 @@ from predictions_cup.execution.models import (
 )
 from predictions_cup.execution.planner import build_execution_plan
 from predictions_cup.execution.reservations import ExecutionReservationBook
+from predictions_cup.execution.sinks import ExecutionPlan
 from predictions_cup.observe import (
     BoundedObservationEmitter,
     InMemoryObservationSink,
@@ -662,3 +665,169 @@ def test_observe_classifies_final_429_503_and_transport_timeout(
     finally:
         emitter.close()
         journal.close()
+
+
+def _batch_zero_effect_data() -> dict[str, object]:
+    return {
+        "orderId": None, "exchangeId": "36", "open": False,
+        "remainingQuantity": "0", "quantityTraded": "0", "totalCost": "0",
+        "fillPrice": None, "price": "0.19", "quantity": 1,
+        "all": {
+            "fullNotionalCost": 0, "effectiveEntryCost": 0,
+            "collateralSavings": 0, "outstandingAdvanceAfter": 0,
+            "collateralRepayment": 0, "netBuyingPowerImpact": 0,
+            "redemptionCredit": 0,
+        },
+    }
+
+
+@pytest.mark.parametrize("field, value", [
+    ("open", True),
+    ("quantityTraded", "1"),
+    ("remainingQuantity", "1"),
+    ("totalCost", "1"),
+    ("fillPrice", "0.5"),
+    ("orderId", 19),
+    ("all", None),
+])
+def test_batch_noop_must_prove_terminal_zero_effect(
+    field: str, value: object,
+) -> None:
+    clean = _batch_zero_effect_data()
+    assert SigLiveSink._batch_terminal_zero_effect(
+        SimpleNamespace(ok=True, data=clean),
+    )
+    dirty = _batch_zero_effect_data()
+    dirty[field] = value
+    assert not SigLiveSink._batch_terminal_zero_effect(
+        SimpleNamespace(ok=True, data=dirty),
+    )
+
+
+def test_batch_noop_rejects_nonzero_or_unreported_cash_movement() -> None:
+    data = _batch_zero_effect_data()
+    collateral = data["all"]
+    assert isinstance(collateral, dict)
+    collateral["netBuyingPowerImpact"] = 0.5
+    assert not SigLiveSink._batch_terminal_zero_effect(
+        SimpleNamespace(ok=True, data=data),
+    )
+    collateral["netBuyingPowerImpact"] = 0
+    del collateral["redemptionCredit"]
+    assert not SigLiveSink._batch_terminal_zero_effect(
+        SimpleNamespace(ok=True, data=data),
+    )
+
+
+class _ZeroEffectBatchClient(FakeTradingClient):
+    def __init__(self, results: list[dict[str, object]]) -> None:
+        self.results = results
+
+    async def place_batch_payload(self, payload_json: str) -> BatchOrderResponseDto:
+        request = json.loads(payload_json)
+        assert len(request["orders"]) == len(self.results)
+        return BatchOrderResponseDto.model_validate({"results": self.results})
+
+
+def _batch_test_plan() -> tuple[ExecutionPlan, tuple[RuntimeOrderIntent, ...]]:
+    intents = (
+        _intent(),
+        replace(_intent(), intent_id="intent-92", exchange_id="37", market_id="m2"),
+    )
+    decision = RiskDecision(
+        approved=True, reason="approved", execution_mode=ExecutionMode.LIVE,
+        operation_kind=OperationKind.BEST_EFFORT_BATCH, intents=intents,
+        strategy_family="MAKE", strategy_id="fixture",
+        signal_value=0.03, fair_value=0.55, decision_observation_ns=100,
+    )
+    plan = build_execution_plan(
+        decision, logical_operation_id="batch-zero-effect", created_monotonic_ns=150,
+    )
+    return plan, intents
+
+
+@pytest.mark.parametrize("second_open", [False, True])
+def test_batch_terminal_zero_effect_never_creates_phantom_ack_or_reservation(
+    tmp_path: Path, second_open: bool,
+) -> None:
+    plan, intents = _batch_test_plan()
+    response = [
+        {"index": 0, "ok": True, "status": 200, "data": _batch_zero_effect_data()},
+    ]
+    if second_open:
+        response.append({
+            "index": 1, "ok": True, "status": 200,
+            "data": {
+                "orderId": 92, "exchangeId": "37", "open": True,
+                "remainingQuantity": "1", "quantityTraded": "0", "totalCost": "0",
+                "fillPrice": None,
+            },
+        })
+    else:
+        response.append({
+            "index": 1, "ok": True, "status": 200, "data": _batch_zero_effect_data(),
+        })
+    journal = ExecutionJournal(tmp_path / "terminal-noop.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, intents)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, _ZeroEffectBatchClient(response)),
+        journal=journal, permit=_permit(), reservations=reservations,
+    )
+    try:
+        result = asyncio.run(sink.dispatch(plan))
+        events = [
+            item for item in journal.events(plan.envelope.logical_operation_id)
+            if item.event_type in {"ACK", "REJECTED"}
+        ]
+        assert len(events) == 2
+        assert events[0].event_type == "REJECTED"
+        assert events[0].exchange_order_id is None
+        assert "intent-91" not in reservations.intent_ids()
+        if second_open:
+            assert result.state is LifecycleState.ACKED
+            assert events[1].event_type == "ACK"
+            assert events[1].exchange_order_id == "92"
+            assert reservations.intent_ids() == frozenset({"intent-92"})
+        else:
+            assert result.state is LifecycleState.REJECTED
+            assert events[1].event_type == "REJECTED"
+            assert not reservations.intent_ids()
+    finally:
+        journal.close()
+
+
+def test_ambiguous_idless_batch_ack_remains_risk_bearing(tmp_path: Path) -> None:
+    plan, intents = _batch_test_plan()
+    uncertain = _batch_zero_effect_data()
+    uncertain["open"] = True
+    rows = [
+        {"index": 0, "ok": True, "status": 200, "data": uncertain},
+        {"index": 1, "ok": True, "status": 200, "data": _batch_zero_effect_data()},
+    ]
+    journal = ExecutionJournal(tmp_path / "ambiguous-noop.sqlite3")
+    reservations = ExecutionReservationBook()
+    reservations.reserve(plan.envelope.logical_operation_id, intents)
+    sink = SigLiveSink(
+        client=cast(SigTradingClient, _ZeroEffectBatchClient(rows)),
+        journal=journal, permit=_permit(), reservations=reservations,
+    )
+    try:
+        result = asyncio.run(sink.dispatch(plan))
+        assert result.state is LifecycleState.ACKED
+        recorded = [
+            item for item in journal.events(plan.envelope.logical_operation_id)
+            if item.event_type in {"ACK", "REJECTED"}
+        ]
+        assert [event.event_type for event in recorded] == ["ACK", "REJECTED"]
+        assert reservations.intent_ids() == frozenset({"intent-91"})
+    finally:
+        journal.close()
+
+
+def test_terminal_intent_release_cannot_discard_different_operation() -> None:
+    book = ExecutionReservationBook()
+    book.reserve("old-op", (_intent(),))
+    with pytest.raises(ValueError, match="matching operation"):
+        book.release_terminal_intent("new-op", "intent-91")
+    assert "intent-91" in book.intent_ids()

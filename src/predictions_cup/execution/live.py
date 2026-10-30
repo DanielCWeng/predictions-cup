@@ -8,6 +8,7 @@ import json
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
 from time import monotonic_ns
 from uuid import uuid4
 
@@ -454,11 +455,17 @@ class SigLiveSink:
                     else None
                 )
                 order_id = batch_result.data.get("orderId")
+                # SIG sometimes returns ok=true without creating an order.
+                # A fully terminal, zero-fill, zero-collateral response is not
+                # an ACK to a live order. Never classify ambiguous responses
+                # this way: they still demand reconciliation.
+                terminal_noop = self._batch_terminal_zero_effect(batch_result)
+                acknowledged = batch_result.ok and not terminal_noop
                 self._journal.record_event(
                     logical_operation_id=envelope.logical_operation_id,
                 tournament_id=envelope.tournament_id,
                     logical_intent_id=None if intent is None else intent.intent_id,
-                    event_type="ACK" if batch_result.ok else "REJECTED",
+                    event_type="ACK" if acknowledged else "REJECTED",
                     observed_monotonic_ns=observed,
                     decision_observation_ns=(
                         None if intent is None else intent.decision_observation_ns
@@ -469,7 +476,7 @@ class SigLiveSink:
                     ),
                     terminal_status=(
                         LifecycleState.ACKED.value
-                        if batch_result.ok
+                        if acknowledged
                         else LifecycleState.REJECTED.value
                     ),
                     detail_json=json.dumps(
@@ -478,9 +485,13 @@ class SigLiveSink:
                         separators=(",", ":"),
                     ),
                 )
+                if terminal_noop and require_reservation and intent is not None:
+                    self._reservations.release_terminal_intent(
+                        envelope.logical_operation_id, intent.intent_id,
+                    )
                 if (
                     require_reservation
-                    and batch_result.ok
+                    and acknowledged
                     and intent is not None
                     and isinstance(order_id, (int, str))
                 ):
@@ -492,7 +503,7 @@ class SigLiveSink:
                 self._observe(
                     (
                         ObservationKind.ACK
-                        if batch_result.ok
+                        if acknowledged
                         else ObservationKind.REJECTED
                     ),
                     envelope,
@@ -580,10 +591,58 @@ class SigLiveSink:
         )
 
     @staticmethod
+    def _batch_terminal_zero_effect(result: object) -> bool:
+        """Identify only a SIG-confirmed non-order with no economic effect.
+
+        Not every absent orderId is a rejection: an open, partially filled or
+        financially nonzero response MUST remain uncertain and be reconciled.
+        A terminal zero-effect response cannot be treated as an ACK because
+        the account proxy would otherwise invent an unidentifiable live order.
+        """
+        if getattr(result, "ok", None) is not True:
+            return False
+        data = getattr(result, "data", None)
+        if (
+            not isinstance(data, dict)
+            or data.get("orderId") is not None
+            or data.get("open") is not False
+            or data.get("fillPrice") is not None
+        ):
+            return False
+
+        def zero(value: object) -> bool:
+            if value is None or isinstance(value, bool):
+                return False
+            try:
+                amount = Decimal(str(value))
+            except (InvalidOperation, ValueError, TypeError):
+                return False
+            return amount.is_finite() and amount == 0
+
+        if not all(
+            key in data and zero(data[key])
+            for key in ("remainingQuantity", "quantityTraded", "totalCost")
+        ):
+            return False
+        collateral = data.get("all")
+        if not isinstance(collateral, dict):
+            return False
+        return all(
+            key in collateral and zero(collateral[key])
+            for key in (
+                "fullNotionalCost", "effectiveEntryCost", "collateralSavings",
+                "outstandingAdvanceAfter", "collateralRepayment",
+                "netBuyingPowerImpact", "redemptionCredit",
+            )
+        )
+
+    @staticmethod
     def _batch_conclusively_rejected(results: tuple[object, ...]) -> bool:
         if not results:
             return False
         for result in results:
+            if SigLiveSink._batch_terminal_zero_effect(result):
+                continue
             ok = getattr(result, "ok", None)
             status = getattr(result, "status", None)
             if ok is not False or not isinstance(status, int):
