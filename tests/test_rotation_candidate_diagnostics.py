@@ -428,3 +428,42 @@ def test_atomic_scout_only_requests_depth_on_trusted_price_qualified_books() -> 
     coordinator.observe_rotation_cached_batch({"22": snap})
     assert coordinator._rotation_allocator.entries.keys() == {"22"}
     assert len(requested) == 1
+
+
+def test_passive_maker_recycling_published_without_any_entry_or_active_exit() -> None:
+    strict = LiquidityWeightedAllocator()
+    advisory = LiquidityWeightedAllocator(advisory_include_resting_orders=True)
+    s = snapshot(
+        eid="11", signed=800, pm_bid=.80, pm_ask=.82,
+        yes_bid=100, yes_ask=164, open_order=True,
+    )
+    for allocator in (strict, advisory):
+        allocator.observe(s, "token-11")
+    assert strict.exits == {} and strict.entries == {}
+    assert "11" in advisory.exits and advisory.entries == {}
+
+    published: list[frozenset[str]] = []
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._rotation_allocator = strict
+    coordinator._rotation_preclear_allocator = advisory
+    coordinator._rotation_evidence = cast(
+        Any, SimpleNamespace(update_account=lambda **_: None),
+    )
+    coordinator._rotation_pending_entries = {}
+    coordinator._rotation_capacity_priority_enabled = False
+    coordinator._rotation_priority_published = False
+    coordinator._rotation_pause_quotes = None
+    coordinator._active_rotation_exits = True
+    coordinator._request_rotation_recheck = None
+    coordinator._rotation_cached_sweep = None
+    coordinator._rotation_last_coordinated_recheck_ns = 0
+    coordinator._rotation_coordinated_rechecks = 0
+    coordinator._rotation_last_rank_ns = 0
+    coordinator._rotation_pending = {}
+    coordinator._rotation_reduce_only_targets = lambda ids, _: published.append(ids)
+
+    coordinator._capture_rotation(s, risk_ready=True)
+    assert published == [frozenset({"11"})]
+    assert coordinator._rotation_pending == {}  # No taker exit authorization.
+    coordinator._capture_rotation(s, risk_ready=False)
+    assert published[-1] == frozenset()
