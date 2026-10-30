@@ -430,11 +430,14 @@ def test_atomic_scout_only_requests_depth_on_trusted_price_qualified_books() -> 
     assert len(requested) == 1
 
 
-def test_passive_maker_recycling_published_without_any_entry_or_active_exit() -> None:
+@pytest.mark.parametrize("signed", [800, -800])
+def test_passive_maker_recycling_published_without_any_entry_or_active_exit(
+    signed: int,
+) -> None:
     strict = LiquidityWeightedAllocator()
     advisory = LiquidityWeightedAllocator(advisory_include_resting_orders=True)
     s = snapshot(
-        eid="11", signed=800, pm_bid=.80, pm_ask=.82,
+        eid="11", signed=signed, pm_bid=.80, pm_ask=.82,
         yes_bid=100, yes_ask=164, open_order=True,
     )
     for allocator in (strict, advisory):

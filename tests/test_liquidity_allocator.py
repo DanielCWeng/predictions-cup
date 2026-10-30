@@ -370,7 +370,7 @@ def test_full_depth_large_exit_is_not_hidden_by_25_shallow_touches() -> None:
     assert allocator.last_rank_diagnostic["gain_hurdle"] == 100
 
 
-def test_passive_recycle_targets_held_yes_without_any_entry_candidate() -> None:
+def test_passive_recycle_targets_held_yes_and_no_without_any_entry_candidate() -> None:
     a = LiquidityWeightedAllocator(advisory_include_resting_orders=True)
     held = (
         RuntimePosition("11", "m11", "t1", 1000, 1000),
@@ -389,7 +389,7 @@ def test_passive_recycle_targets_held_yes_without_any_entry_candidate() -> None:
     ), "token-22")
     assert a.entries == {}
     assert set(a.exits) == {"11", "22"}
-    assert a.passive_recycle_targets(now_ns=30_000_000_000) == frozenset({"11"})
+    assert a.passive_recycle_targets(now_ns=30_000_000_000) == frozenset({"11", "22"})
     assert a.rank(now_ns=30_000_000_000) == ()
 
 
@@ -420,3 +420,27 @@ def test_passive_recycling_bounded_to_eight_and_skips_no_inventory() -> None:
         ), "token-"+str(i))
     assert len(a.passive_recycle_targets(now_ns=30_000_000_000)) == 8
     assert len(a.exits) == 11
+
+
+def test_passive_recycle_no_cover_has_realizable_redemption_value() -> None:
+    allocator = LiquidityWeightedAllocator(advisory_include_resting_orders=True)
+    no_held = snapshot(
+        eid="22", market="m22", signed=-1000,
+        pm_bid=.80, pm_ask=.82, yes_bid=100, yes_ask=164,
+    )
+    allocator.observe(no_held, "token-22")
+    assert allocator.entries == {}
+    assert set(allocator.exits) == {"22"}
+    # A BUY YES against held NO is a reducing order; its matching pair
+    # redeems for 1 SUSQie (sale proceeds 1 - YES ask). The shortlist
+    # remains advisory-only and cannot place or finance an order.
+    assert allocator.passive_recycle_targets(now_ns=no_held.now_monotonic_ns) == (
+        frozenset({"22"})
+    )
+
+    # Neither quote staleness nor an uncertain risk snapshot grants eligibility.
+    stale = replace(no_held, sig_depth_observed_ns=no_held.now_monotonic_ns - 20_000_000_000)
+    allocator.observe(stale, "token-22")
+    assert allocator.passive_recycle_targets(now_ns=no_held.now_monotonic_ns) == frozenset()
+    allocator.observe(no_held, "token-22", risk_state_trusted=False)
+    assert allocator.passive_recycle_targets(now_ns=no_held.now_monotonic_ns) == frozenset()

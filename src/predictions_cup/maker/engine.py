@@ -26,7 +26,7 @@ from predictions_cup.maker.contracts import (
     ToxicityProvider,
 )
 from predictions_cup.maker.policies import with_quote_math
-from predictions_cup.runtime.models import SIG_TICK
+from predictions_cup.runtime.models import SIG_TICK, AccountTrustGrade
 
 _TICK = float(SIG_TICK)
 # Fill-seeking shrinks risk-increasing size once projected inventory passes
@@ -484,12 +484,34 @@ class MakerEngine:
         cash = portfolio.account_proxy_cash_balance
         if cash is not None and cash.is_finite():
             budget = max(0.0, float(cash))
-            required_bid_cash = (
-                sum(level.size * level.price_ticks * _TICK for level in desired_bid_levels)
+            bid_cash_levels = (
+                desired_bid_levels
                 if desired_bid_levels
-                else (bid_size * bid_ticks * _TICK if bid_ticks is not None else 0.0)
+                else (
+                    (QuoteLevel(price_ticks=bid_ticks, size=bid_size),)
+                    if bid_ticks is not None and bid_size > 0
+                    else ()
+                )
             )
-            if required_bid_cash > budget + 1e-9:
+            required_bid_cash = sum(
+                level.size * level.price_ticks * _TICK for level in bid_cash_levels
+            )
+            total_bid_shares = sum(level.size for level in bid_cash_levels)
+            # SIG explicitly nets a BUY YES against held NO: the opposite
+            # pair is redeemed for 1 SUSQie, which pays for the YES purchase.
+            # This order is therefore a cash *release*, not a new cash-funded
+            # YES buy, provided every share is an independently proven NO
+            # reduction under the same worst-case open-order inventory bounds.
+            # Mixed / overshooting buys never receive this credit.
+            netted_no_close = (
+                portfolio.account_trusted
+                and portfolio.trust_grade is AccountTrustGrade.TRUSTED
+                and portfolio.account_proxy_uncertainty == 0
+                and total_bid_shares > 0
+                and high < 0
+                and total_bid_shares <= math.floor(-high)
+            )
+            if required_bid_cash > budget + 1e-9 and not netted_no_close:
                 bid_ticks = None
                 bid_size = 0
                 desired_bid_levels = ()
