@@ -302,6 +302,12 @@ class AccountProxyLedger:
                 continue
             order = self._orders.get(str(update.order_id))
             if order is None:
+                logger.warning(
+                    "SIG account unknown update order=%s exchange=%s market=%s "
+                    "open=%s traded=%s total_cost=%s",
+                    update.order_id, update.exchange_id, update.market_id,
+                    update.open, update.quantity_traded, update.total_cost,
+                )
                 self._mark_discrepancy("order_update_for_unknown_order")
                 continue
             if (
@@ -508,6 +514,12 @@ class AccountProxyLedger:
             update_order = self._known_order(event.exchange_order_id)
             quantity = _decimal(event.quantity)
             if update_order is None or quantity is None:
+                logger.warning(
+                    "SIG journal unknown update order=%s exchange=%s "
+                    "status=%s quantity=%s",
+                    event.exchange_order_id, event.exchange_id,
+                    event.terminal_status, event.quantity,
+                )
                 self._mark_discrepancy("journal_order_update_identity_unavailable")
                 return
             if not update_order.baseline_order:
