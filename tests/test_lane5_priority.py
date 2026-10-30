@@ -208,8 +208,15 @@ def test_repair_precheck_refuses_aged_or_size_less_evidence() -> None:
     assert h.coordinator._candidate_refresh_score(
         empty, signal, action=OrderAction.BUY,
     ) is None
+    very_old_now = NOW + 31_000_000_000
     stale = replace(
-        good, sig_bbo_observed_ns=NOW - 6_000_000_000,
+        good, now_monotonic_ns=very_old_now,
+        external_quotes={
+            TOKEN: replace(
+                good.external_quotes[TOKEN],
+                observed_monotonic_ns=very_old_now,
+            ),
+        },
     )
     assert h.coordinator._candidate_refresh_score(
         stale, signal, action=OrderAction.BUY,
@@ -248,3 +255,43 @@ def test_proxy_input_has_finite_sig_touch_window_and_exact_book_identity() -> No
         allow_bbo_proxy=True,
         max_proxy_bbo_age_ns=15_000_000_000,
     ) is None
+
+
+def test_actual_west_15s_bbo_limit_can_refresh_20s_old_touch_but_never_trade() -> None:
+    from test_residual_taker_live import NOW
+    current_ns = NOW + 20_000_000_000
+    h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
+    h.coordinator._max_sig_bbo_age_ns = 15_000_000_000
+    h.coordinator._max_sig_stream_depth_age_ns = 15_000_000_000
+    refreshed: list[tuple[str, float]] = []
+    h.coordinator._request_fresh_depth = (
+        lambda eid, score: refreshed.append((eid, score))
+    )
+    original = _snapshot(ask=140, pm_bid=.77, pm_ask=.78)
+    snapshot = replace(
+        original,
+        now_monotonic_ns=current_ns,
+        external_quotes={
+            TOKEN: replace(
+                original.external_quotes[TOKEN],
+                observed_monotonic_ns=current_ns,
+            ),
+        },
+    )
+    h.run(snapshot)
+    assert refreshed and refreshed[0][1] > 0
+    assert h.coordinator._attempted_orders == 0
+    assert h.plans == []
+    beyond = replace(
+        snapshot,
+        now_monotonic_ns=NOW + 31_000_000_000,
+        external_quotes={
+            TOKEN: replace(
+                original.external_quotes[TOKEN],
+                observed_monotonic_ns=NOW + 31_000_000_000,
+            ),
+        },
+    )
+    h.run(beyond, sequence=2)
+    assert len(refreshed) == 1
+    assert not h.plans
