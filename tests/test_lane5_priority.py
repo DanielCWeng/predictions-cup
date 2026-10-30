@@ -35,10 +35,13 @@ def test_depth_queue_can_service_burst_across_two_second_global_pacing() -> None
     q = CandidateDepthQueue()
     for eid, score in (("first", 3.0), ("second", 2.0), ("third", 1.0)):
         assert q.offer(eid, score, 1_000_000_000)
-    assert q.pick(1_000_000_000).exchange_id == "first"
+    first = q.pick(1_000_000_000)
+    assert first is not None and first.exchange_id == "first"
     assert q.pick(2_990_000_000) is None
-    assert q.pick(3_000_000_000).exchange_id == "second"
-    assert q.pick(5_000_000_000).exchange_id == "third"
+    second = q.pick(3_000_000_000)
+    assert second is not None and second.exchange_id == "second"
+    third = q.pick(5_000_000_000)
+    assert third is not None and third.exchange_id == "third"
     assert q.requests_started == 3
 
 
