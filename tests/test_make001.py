@@ -3535,7 +3535,7 @@ def test_held_no_close_with_proxy_or_uncertainty_has_no_cash_exemption() -> None
 def test_no_close_quote_affordability_reserves_outstanding_cover_orders() -> None:
     maker = _engine(recycle_exchange_ids=frozenset({"36"}), base_size=6)
     covered = _with_cash(_maker_snapshot(signed_inventory=-5.0), "0")
-    portfolio = covered.runtime.portfolio
+    assert covered.runtime.portfolio.account_trusted
     # A separately pending +4 YES buy could already cover most NO inventory.
     # Worst-case high is -1, so a second larger buy is not cash-free.
     pending = RuntimeOrderState(
