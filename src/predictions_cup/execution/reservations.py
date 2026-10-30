@@ -185,6 +185,20 @@ class ExecutionReservationBook:
             for intent_id in intent_ids
         )
 
+    def release_terminal_intent(
+        self, logical_operation_id: str, intent_id: str,
+    ) -> bool:
+        """Release only a proven non-order, never a placed/ambiguous intent."""
+        reservation = self._by_intent.get(intent_id)
+        if reservation is None:
+            return False
+        if reservation.logical_operation_id != logical_operation_id:
+            raise ValueError("terminal release requires matching operation identity")
+        if reservation.exchange_order_id is not None:
+            raise ValueError("cannot release a bound order as a terminal non-order")
+        self._by_intent.pop(intent_id)
+        return True
+
     def release_operation(self, logical_operation_id: str) -> int:
         """Release only reservations owned by one conclusively dead operation."""
         if not logical_operation_id.strip():
