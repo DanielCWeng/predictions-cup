@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections import defaultdict
 from datetime import UTC, datetime
-from decimal import Decimal, ROUND_FLOOR
+from decimal import ROUND_FLOOR, Decimal
 from typing import Any
 
 from predictions_cup.analysis.election_capital import estimate_reducing_exit
