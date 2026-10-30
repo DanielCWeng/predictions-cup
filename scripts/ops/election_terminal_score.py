@@ -115,6 +115,10 @@ def rank_candidate_document(document: dict[str, Any]) -> dict[str, object]:
         max_quote_age_seconds=document.get("max_quote_age_seconds", 15.0),
         min_robust_gain=document.get("min_robust_gain", 0.0),
         max_results=document.get("max_results", 15),
+        milestone_targets=tuple(
+            (int(rank), balance)
+            for rank, balance in document.get("rank_milestones", {}).items()
+        ),
     )
     return result.as_document()
 
