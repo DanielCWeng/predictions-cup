@@ -469,6 +469,13 @@ class MakerEngine:
                 if gate.mode is not GateMode.BID_ONLY
                 else ()
             )
+            # Reduce-only ladders use a single order identity and the normal
+            # strict one-intent central risk proof, never an ambiguous batch.
+            if gate.reason == "capital_recycle_reduce_only":
+                if gate.mode is GateMode.BID_ONLY:
+                    desired_bid_levels = desired_bid_levels[:1]
+                elif gate.mode is GateMode.ASK_ONLY:
+                    desired_ask_levels = desired_ask_levels[:1]
             bid_ticks = None if not desired_bid_levels else desired_bid_levels[0].price_ticks
             ask_ticks = None if not desired_ask_levels else desired_ask_levels[0].price_ticks
             bid_size = 0 if not desired_bid_levels else desired_bid_levels[0].size

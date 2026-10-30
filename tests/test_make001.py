@@ -3546,3 +3546,35 @@ def test_no_close_quote_affordability_reserves_outstanding_cover_orders() -> Non
     constrained = _with_cash(covered, "0", orders=(pending,))
     result = maker.quote(constrained)
     assert result.desired is None or result.desired.bid_size == 0
+
+
+@pytest.mark.parametrize("signed", (-180.0, 180.0))
+def test_recycle_deep_ladder_uses_single_proven_reducing_order(
+    signed: float,
+) -> None:
+    maker = _engine(
+        max_inventory=200, deep_ladder_enabled=True,
+        deep_ladder_position_cap=200, recycle_exchange_ids=frozenset({"36"}),
+    )
+    held = _with_cash(_maker_snapshot(signed_inventory=signed), "0")
+    decision = maker.quote(held)
+    assert decision.gate.reason == "capital_recycle_reduce_only"
+    assert decision.desired is not None
+    if signed < 0:
+        assert len(decision.desired.bid_levels) == 1
+        assert decision.desired.bid_size > 0
+        assert decision.desired.bid_size <= -signed
+        assert decision.desired.ask_levels == ()
+    else:
+        assert len(decision.desired.ask_levels) == 1
+        assert decision.desired.ask_size > 0
+        assert decision.desired.ask_size <= signed
+        assert decision.desired.bid_levels == ()
+
+
+def test_normal_deep_ladder_remains_multi_level() -> None:
+    maker = _engine(max_inventory=200, deep_ladder_enabled=True)
+    result = maker.quote(_maker_snapshot(signed_inventory=0))
+    assert result.desired is not None
+    assert len(result.desired.bid_levels) > 1
+    assert len(result.desired.ask_levels) > 1
