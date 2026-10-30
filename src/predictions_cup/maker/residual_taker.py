@@ -195,6 +195,7 @@ def residual_input_from_snapshot(
     observed_monotonic_ns: int,
     allow_bbo_proxy: bool = False,
     threshold: float = THRESHOLD,
+    max_proxy_bbo_age_ns: int | None = None,
 ) -> ResidualInput | None:
     """Build the frozen signal input, or None when any input is untrusted/stale."""
 
@@ -213,7 +214,20 @@ def residual_input_from_snapshot(
     quote_age_ns = None if quote is None else maker.now_monotonic_ns - quote.observed_monotonic_ns
     if allow_bbo_proxy:
         quote_age_invalid = quote_age_ns is None or not 0 <= quote_age_ns <= max_pm_book_age_ns
-        bbo_invalid = sig_bbo_age_ns < 0
+        # Proxy mode must not generate an endless stream of apparently
+        # profitable signals from an arbitrarily old SIG touch. Its BBO
+        # can be slightly older than the execution TTL ONLY to request a
+        # fresh governed book; the live taker rechecks execution freshness.
+        proxy_bound = (
+            max_pm_book_age_ns
+            if max_proxy_bbo_age_ns is None
+            else max_proxy_bbo_age_ns
+        )
+        bbo_invalid = (
+            proxy_bound < 0
+            or sig_bbo_age_ns < 0
+            or sig_bbo_age_ns > proxy_bound
+        )
         book_identity_invalid = (
             book is None
             or book.market_id != maker.market_id

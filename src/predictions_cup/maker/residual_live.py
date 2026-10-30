@@ -78,6 +78,8 @@ from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFam
 
 _LOG = logging.getLogger(__name__)
 _LIVENESS_INTERVAL_SECONDS = 60.0
+# GET-only repair probe, NEVER an execution freshness extension.
+_MAX_REPAIR_TOUCH_AGE_NS = 30_000_000_000
 
 PlanDispatcher = Callable[[ExecutionPlan], Awaitable[ExecutionEvent]]
 CancelDispatcher = Callable[[ExecutionEnvelope], Awaitable[ExecutionEvent]]
@@ -809,6 +811,9 @@ class ResidualTakerLiveCoordinator:
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
                 allow_bbo_proxy=self._allow_bbo_proxy,
                 threshold=self._threshold,
+                max_proxy_bbo_age_ns=max(
+                    self._max_sig_bbo_age_ns, _MAX_REPAIR_TOUCH_AGE_NS,
+                ),
             )
             if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
@@ -1441,10 +1446,16 @@ class ResidualTakerLiveCoordinator:
         if not snapshot.sig_bbo_trusted or not book.bids or not book.asks:
             return None
         bbo_age = snapshot.now_monotonic_ns - snapshot.sig_bbo_observed_ns
-        # A depth repair request is not an order. Use the independent BBO
-        # freshness bound here, not the full-book execution TTL. Requiring
-        # 1.5s BBO for a 5-10s REST recovery silently rejects good candidates.
-        if bbo_age < 0 or bbo_age >= self._max_sig_bbo_age_ns:
+        # The BBO execution TTL is intentionally tighter than the finite
+        # recovery window. A bounded, stale-touch candidate may request ONE
+        # fresh governed REST book, but the old touch never authorises a
+        # trade: _take requires fresh depth and independently rechecks fair.
+        # This repairs the previous circular exclusion: stale depth required
+        # REST refresh but the stale BBO prevented the REST request.
+        recovery_age_ns = max(
+            self._max_sig_bbo_age_ns, _MAX_REPAIR_TOUCH_AGE_NS,
+        )
+        if bbo_age < 0 or bbo_age > recovery_age_ns:
             return None
         external = snapshot.external_quotes.get(record.direct_polymarket.mapped_token_id)
         if external is None or not external.trusted:
@@ -1469,9 +1480,26 @@ class ResidualTakerLiveCoordinator:
         )
         if upper_edge <= 0:
             return None
-        # This is a maximum possible opportunity score, not executable EV.
-        # No full-depth assumption or cash assumption is used for admission.
-        return upper_edge * max(1, signal.quantity)
+        # A displayed PM touch is NOT infinite size. Do not let a large
+        # signal with only a few PM shares monopolise the scarce REST queue.
+        ref_size = (
+            external.best_bid_size if action is OrderAction.BUY
+            else external.best_ask_size
+        )
+        if (
+            ref_size is None or not math.isfinite(ref_size)
+            or ref_size < 1
+        ):
+            return None
+        bounded_quantity = min(signal.quantity, math.floor(ref_size))
+        if bounded_quantity < 1:
+            return None
+        # Prefer fresher information when otherwise equal; never turn stale
+        # data into a trade. The score ONLY orders depth-repair GET requests.
+        repair_discount = (
+            0.5 if bbo_age >= self._max_sig_bbo_age_ns else 1.0
+        )
+        return upper_edge * bounded_quantity * repair_discount
 
     async def _take(
         self,
