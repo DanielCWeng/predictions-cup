@@ -233,8 +233,8 @@ def rank_opportunities(
         for entry in entries:
             if entry.trade.market_id == exit_candidate.trade.market_id:
                 continue
-            ids = (exit_candidate.identifier, entry.identifier)
-            proposals.append((ids, TradePlan("rotate:" + ":".join(ids), (
+            pair_ids = (exit_candidate.identifier, entry.identifier)
+            proposals.append((pair_ids, TradePlan("rotate:" + ":".join(pair_ids), (
                 exit_candidate.trade, entry.trade,
             ))))
 
