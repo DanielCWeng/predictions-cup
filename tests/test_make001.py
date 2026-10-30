@@ -3480,3 +3480,69 @@ def test_recycle_never_keeps_oversize_or_uncertain_quote() -> None:
         [a for a in uncertain if a.side is QuoteSide.ASK][0].kind
         is QuoteLifecycleActionKind.WAIT_RECONCILIATION
     )
+
+
+def _with_cash(
+    snapshot: MakerMarketSnapshot, cash: str,
+    *, trust_grade: AccountTrustGrade | None = None,
+    orders: tuple[RuntimeOrderState, ...] | None = None,
+) -> MakerMarketSnapshot:
+    portfolio = snapshot.runtime.portfolio
+    portfolio = replace(
+        portfolio,
+        account_proxy_cash_balance=Decimal(cash),
+        account_trust_grade=trust_grade,
+        orders=portfolio.orders if orders is None else orders,
+    )
+    return replace(snapshot, runtime=replace(snapshot.runtime, portfolio=portfolio))
+
+
+def test_held_no_close_maker_can_quote_even_when_cash_zero() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}))
+    zero_cash = _with_cash(_maker_snapshot(signed_inventory=-5.0), "0")
+    decision = maker.quote(zero_cash)
+    assert decision.gate.reason == "capital_recycle_reduce_only"
+    assert decision.desired is not None
+    assert decision.desired.bid_size > 0
+    assert decision.desired.bid_size <= 5
+    assert decision.desired.ask_size == 0
+
+
+def test_held_no_close_never_credits_overshoot_into_new_yes() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}), base_size=50)
+    zero_cash = _with_cash(_maker_snapshot(signed_inventory=-1.0), "0")
+    decision = maker.quote(zero_cash)
+    # With more quoted shares than proven NO inventory, the entire buy must
+    # pass the ordinary gross cash gate; no partial / hypothetical redemption.
+    assert decision.desired is None or decision.desired.bid_size == 0
+
+
+def test_held_no_close_with_proxy_or_uncertainty_has_no_cash_exemption() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}), base_size=4)
+    proxy = _with_cash(
+        _maker_snapshot(signed_inventory=-5.0), "0",
+        trust_grade=AccountTrustGrade.PROXY,
+    )
+    decision = maker.quote(proxy)
+    assert decision.desired is None or decision.desired.bid_size == 0
+    uncertain = _with_cash(_maker_snapshot(signed_inventory=-5.0), "0")
+    portfolio = replace(uncertain.runtime.portfolio, account_proxy_uncertainty=1.0)
+    uncertain = replace(uncertain, runtime=replace(uncertain.runtime, portfolio=portfolio))
+    decision = maker.quote(uncertain)
+    assert decision.desired is None or decision.desired.bid_size == 0
+
+
+def test_no_close_quote_affordability_reserves_outstanding_cover_orders() -> None:
+    maker = _engine(recycle_exchange_ids=frozenset({"36"}), base_size=6)
+    covered = _with_cash(_maker_snapshot(signed_inventory=-5.0), "0")
+    portfolio = covered.runtime.portfolio
+    # A separately pending +4 YES buy could already cover most NO inventory.
+    # Worst-case high is -1, so a second larger buy is not cash-free.
+    pending = RuntimeOrderState(
+        exchange_id="36", market_id="m1", tournament_id=TOURNAMENT,
+        logical_intent_id="already-covering", reserved_exposure=4.0,
+        signed_quantity=4.0, open=True, uncertain=False,
+    )
+    constrained = _with_cash(covered, "0", orders=(pending,))
+    result = maker.quote(constrained)
+    assert result.desired is None or result.desired.bid_size == 0
