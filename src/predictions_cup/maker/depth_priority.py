@@ -11,7 +11,7 @@ class DepthCandidate:
     observed_ns: int
 
 class CandidateDepthQueue:
-    """Bounded coalesced priority queue; 1.2s TTL; 2s global and 5s per-market pacing."""
+    """Bounded priority queue; 4.5s discovery TTL; 2s global / 5s per-market pacing."""
     def __init__(self, max_pending: int = 12):
         if max_pending < 1:
             raise ValueError("max_pending")
@@ -25,7 +25,7 @@ class CandidateDepthQueue:
 
     def _expire(self, now_ns: int) -> None:
         for key, item in tuple(self.pending.items()):
-            if now_ns < item.observed_ns or now_ns - item.observed_ns > 1_200_000_000:
+            if now_ns < item.observed_ns or now_ns - item.observed_ns > 4_500_000_000:
                 self.pending.pop(key, None)
                 self.dropped_expired += 1
         for key, value in tuple(self.last_market_ns.items()):

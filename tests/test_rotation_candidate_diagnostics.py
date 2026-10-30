@@ -336,3 +336,95 @@ def test_disabled_atomic_sweep_cannot_prime_rotation_cache() -> None:
         "11": snapshot(eid="11", pm_bid=.70, pm_ask=.72, yes_ask=106),
     })
     assert allocator.observed == 0
+
+
+def test_bbo_only_depth_scout_requires_current_strong_after_cost_edge() -> None:
+    allocator = LiquidityWeightedAllocator(min_marginal_net_edge=.08)
+    good = snapshot(
+        eid="22", market="m22", pm_bid=.80, pm_ask=.82,
+        yes_bid=100, yes_ask=106,
+    )
+    stale = replace(
+        good, sig_depth_observed_ns=good.now_monotonic_ns - 20_000_000_000,
+    )
+    allocator.observe(stale, "token-22")
+    assert _reason(allocator, "22") == "sig_depth_stale"
+    assert allocator.entries == {}
+    score = allocator.stale_depth_entry_probe(
+        stale, "token-22", max_sig_bbo_age_ns=1_000_000_000,
+    )
+    assert score is not None and score > 0
+    assert allocator.entries == {}  # Scouting is not execution authority.
+
+    weak = snapshot(eid="22", pm_bid=.60, pm_ask=.62, yes_ask=106)
+    assert allocator.stale_depth_entry_probe(
+        weak, "token-22", max_sig_bbo_age_ns=1_000_000_000,
+    ) is None
+    old_bbo = replace(stale, sig_bbo_observed_ns=stale.now_monotonic_ns - 2_000_000_000)
+    assert allocator.stale_depth_entry_probe(
+        old_bbo, "token-22", max_sig_bbo_age_ns=1_000_000_000,
+    ) is None
+    old_pm = replace(stale, external_quotes={
+        "token-22": replace(
+            stale.external_quotes["token-22"],
+            observed_monotonic_ns=stale.now_monotonic_ns - 6_000_000_000,
+        ),
+    })
+    assert allocator.stale_depth_entry_probe(
+        old_pm, "token-22", max_sig_bbo_age_ns=1_000_000_000,
+    ) is None
+    own_quote = snapshot(eid="22", pm_bid=.80, pm_ask=.82, yes_ask=106,
+                         open_order=True)
+    assert allocator.stale_depth_entry_probe(
+        own_quote, "token-22", max_sig_bbo_age_ns=1_000_000_000,
+    ) is None
+
+
+def test_atomic_scout_only_requests_depth_on_trusted_price_qualified_books() -> None:
+    record = SimpleNamespace(
+        status=MappingStatus.VERIFIED,
+        mapping_class=MappingClass.EXACT,
+        mapping_direction=MappingDirection.SAME,
+        direct_polymarket=SimpleNamespace(mapped_token_id="token-22"),
+    )
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._rotation_allocator = LiquidityWeightedAllocator(
+        min_rotation_gain=100, min_marginal_net_edge=.08,
+    )
+    coordinator._rotation_preclear_allocator = None
+    coordinator._active_rotation_exits = True
+    coordinator._signal = cast(
+        ResidualTakerSignal,
+        SimpleNamespace(tracked_exchange_ids=frozenset({"22"})),
+    )
+    coordinator._mapping = cast(Any, {"22": record})
+    capital = SimpleNamespace(
+        account_trusted=True, reconciliation_complete=True, marks_trusted=True,
+        exposure=SimpleNamespace(trusted=True, uncertain_order_exposure=0),
+        global_halt=None,
+    )
+    coordinator._risk_context_source = cast(
+        Any, SimpleNamespace(capital_state=capital, kill_switch=False),
+    )
+    coordinator._kill_switch = cast(Any, SimpleNamespace(active=False))
+    coordinator._max_sig_bbo_age_ns = 1_000_000_000
+    requested: list[tuple[str, float]] = []
+    coordinator._request_fresh_depth = lambda eid, score: requested.append((eid, score))
+    snap = snapshot(eid="22", market="m22", pm_bid=.80, pm_ask=.82, yes_ask=106)
+    stale = replace(
+        snap, sig_depth_observed_ns=snap.now_monotonic_ns - 20_000_000_000,
+    )
+    coordinator.observe_rotation_cached_batch({"22": stale})
+    assert len(requested) == 1 and requested[0][0] == "22"
+    assert requested[0][1] > 0
+    assert coordinator._rotation_allocator.entries == {}
+    # A later risk block cannot make a queued market executable or add requests.
+    capital.exposure.uncertain_order_exposure = 50
+    coordinator.observe_rotation_cached_batch({"22": stale})
+    assert len(requested) == 1
+    assert coordinator._rotation_allocator.entries == {}
+    # With risk trusted again, a clean fresh book is observed without REST.
+    capital.exposure.uncertain_order_exposure = 0
+    coordinator.observe_rotation_cached_batch({"22": snap})
+    assert coordinator._rotation_allocator.entries.keys() == {"22"}
+    assert len(requested) == 1
