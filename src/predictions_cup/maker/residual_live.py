@@ -570,12 +570,24 @@ class ResidualTakerLiveCoordinator:
         self._publish_rotation_priority(now_ns)
         self._publish_rotation_preclear(trusted=trusted, now_ns=now_ns)
         self._schedule_rotation_coordinated_recheck(trusted=trusted, now_ns=now_ns)
+        # Unlike active two-leg switches, ordinary PASSIVE ASK quotes can
+        # release cash from existing YES holdings without a replacement entry.
+        # The advisory allocator includes own resting quotes, which the maker
+        # will safely replace under its normal price, risk and size gates.
+        screen = self._rotation_preclear_allocator or allocator
+        passive = (
+            screen.passive_recycle_targets(now_ns=now_ns)
+            if trusted and self._rotation_reduce_only_targets is not None
+            else frozenset()
+        )
         if not trusted or not allocator.entries or not allocator.exits:
             self._rotation_pending.clear()
             if self._rotation_reduce_only_targets is not None:
-                self._rotation_reduce_only_targets(frozenset(), now_ns)
+                self._rotation_reduce_only_targets(passive, now_ns)
             return
         if now_ns - self._rotation_last_rank_ns < 500_000_000:
+            if self._rotation_reduce_only_targets is not None:
+                self._rotation_reduce_only_targets(passive, now_ns)
             return
         self._rotation_last_rank_ns = now_ns
         ranked = allocator.rank(now_ns=now_ns, limit=3)
@@ -598,10 +610,11 @@ class ResidualTakerLiveCoordinator:
         if self._rotation_reduce_only_targets is not None:
             # A dynamic target only changes which EXISTING maker side may
             # quote. Never treat the shortlist as permission for a taker exit.
-            self._rotation_reduce_only_targets(
-                frozenset(item.assessment.exit_exchange_id for item in ranked),
-                now_ns,
-            )
+            # Actively ranked exits retain priority when there are more than
+            # eight candidates; fill remaining slots with passive reductions.
+            active_ids = [item.assessment.exit_exchange_id for item in ranked]
+            combined = frozenset((active_ids + sorted(passive))[:8])
+            self._rotation_reduce_only_targets(combined, now_ns)
         for candidate in ranked:
             evidence = RotationEvidence(
                 candidate.assessment.exit_exchange_id,
