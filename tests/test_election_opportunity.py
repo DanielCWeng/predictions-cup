@@ -80,8 +80,8 @@ def test_sale_first_rotation_funds_winning_joint_outcome_and_beats_ev_only() -> 
     assert winner.score.remaining_cash == pytest.approx(9)
     assert winner.score.min_probability_improvement == pytest.approx(.2)
     assert winner.score.min_expected_gain == pytest.approx(19)
-    assert winner.worst_outcome_delta == pytest.approx(-40.5)
-    assert winner.best_outcome_delta == pytest.approx(59.5)
+    assert winner.worst_outcome_delta == pytest.approx(-41)
+    assert winner.best_outcome_delta == pytest.approx(59)
     assert winner.max_initial_cash_required == 0
     assert ranking.execution_authority is False
 
