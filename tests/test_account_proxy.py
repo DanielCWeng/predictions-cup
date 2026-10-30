@@ -4,12 +4,11 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from predictions_cup.config import AppSettings
-from predictions_cup.execution.journal import ExecutionJournal
+from predictions_cup.execution.journal import ExecutionJournal, ExecutionJournalEvent
 from predictions_cup.execution.models import (
     ExecutionEnvelope,
     ExecutionMode,
@@ -586,6 +585,37 @@ def test_unknown_order_update_logs_identity_but_keeps_account_untrusted(
     assert "open=False traded=0 total_cost=0" in caplog.text
 
 
+def _proxy_order_update_event(
+    event_type: str,
+    *,
+    quantity: str | None = None,
+    status: str | None = None,
+    detail: str | None = None,
+) -> ExecutionJournalEvent:
+    return ExecutionJournalEvent(
+        event_id=1,
+        logical_operation_id="fixture-op",
+        tournament_id=TOURNAMENT,
+        logical_intent_id=None,
+        event_type=event_type,
+        observed_monotonic_ns=0,
+        source_timestamp=None,
+        decision_observation_ns=None,
+        decision_monotonic_ns=None,
+        strategy_family=None,
+        strategy_id=None,
+        signal_value=None,
+        fair_value=None,
+        exchange_id=EXCHANGE,
+        exchange_order_id="101",
+        fill_id=None,
+        quantity=quantity,
+        price=None,
+        terminal_status=status,
+        detail_json=detail,
+    )
+
+
 def _reconciled_cancelled_order() -> AccountProxyLedger:
     """Simulate venue cancel ACK preceding a REST open-order read and late close."""
     ledger = _ledger(max_age_ns=10_000)
@@ -593,12 +623,7 @@ def _reconciled_cancelled_order() -> AccountProxyLedger:
         _snapshot(open_orders=(_open_order(),)), observed_monotonic_ns=1_000,
     )
     # This executes exactly the proxy's journal CANCEL_ACK branch.
-    ledger._apply_journal_event(  # type: ignore[arg-type]
-        SimpleNamespace(
-            event_type="CANCEL_ACK", exchange_order_id="101",
-            logical_operation_id="cancel-op", logical_intent_id=None,
-        )
-    )
+    ledger._apply_journal_event(_proxy_order_update_event("CANCEL_ACK"))
     old = ledger.runtime_portfolio(
         account_state_trusted=False, now_monotonic_ns=1_100,
     )
@@ -618,15 +643,12 @@ def test_cancelled_zero_fill_late_close_does_not_poison_account() -> None:
     assert isinstance(updates[0], dict)
     updates[0]["open"] = False
     ledger.apply_realtime_batch(batch)
-    ledger._apply_journal_event(  # type: ignore[arg-type]
-        SimpleNamespace(
-            event_type="REALTIME_ORDER_UPDATE",
-            logical_operation_id="place-op", logical_intent_id=None,
-            exchange_order_id="101",
-            exchange_id=EXCHANGE,
-            terminal_status="CLOSED",
+    ledger._apply_journal_event(
+        _proxy_order_update_event(
+            "REALTIME_ORDER_UPDATE",
+            status="CLOSED",
             quantity="0",
-            detail_json='{"totalCost":"0"}',
+            detail='{"totalCost":"0"}',
         )
     )
     assert ledger.discrepancy_reason is None
@@ -663,15 +685,12 @@ def test_cancelled_late_close_requires_exact_zero_economics(
 
 def test_cancelled_late_close_journal_nonzero_economics_fails_closed() -> None:
     ledger = _reconciled_cancelled_order()
-    ledger._apply_journal_event(  # type: ignore[arg-type]
-        SimpleNamespace(
-            event_type="REALTIME_ORDER_UPDATE",
-            logical_operation_id="place-op", logical_intent_id=None,
-            exchange_order_id="101",
-            exchange_id=EXCHANGE,
-            terminal_status="CLOSED",
+    ledger._apply_journal_event(
+        _proxy_order_update_event(
+            "REALTIME_ORDER_UPDATE",
+            status="CLOSED",
             quantity="1",
-            detail_json='{"totalCost":"0.40"}',
+            detail='{"totalCost":"0.40"}',
         )
     )
     assert ledger.discrepancy_reason == "journal_order_update_identity_unavailable"
