@@ -270,6 +270,17 @@ class MakerCoordinator:
                 current=current,
                 now_monotonic_ns=change.observed_monotonic_ns,
                 force_cancel=force_cancel,
+                recycle_side=(
+                    QuoteSide.ASK
+                    if decision.gate.reason == "capital_recycle_reduce_only"
+                    and decision.gate.mode is GateMode.ASK_ONLY
+                    else (
+                        QuoteSide.BID
+                        if decision.gate.reason == "capital_recycle_reduce_only"
+                        and decision.gate.mode is GateMode.BID_ONLY
+                        else None
+                    )
+                ),
             )
             actions.extend(side_actions)
 
