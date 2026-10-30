@@ -78,6 +78,8 @@ from predictions_cup.strategy.core import CandidateLeg, Opportunity, StrategyFam
 
 _LOG = logging.getLogger(__name__)
 _LIVENESS_INTERVAL_SECONDS = 60.0
+# GET-only repair probe, NEVER an execution freshness extension.
+_MAX_REPAIR_TOUCH_AGE_NS = 30_000_000_000
 
 PlanDispatcher = Callable[[ExecutionPlan], Awaitable[ExecutionEvent]]
 CancelDispatcher = Callable[[ExecutionEnvelope], Awaitable[ExecutionEvent]]
@@ -809,7 +811,9 @@ class ResidualTakerLiveCoordinator:
                 observed_monotonic_ns=snapshot.now_monotonic_ns,
                 allow_bbo_proxy=self._allow_bbo_proxy,
                 threshold=self._threshold,
-                max_proxy_bbo_age_ns=self._max_sig_stream_depth_age_ns,
+                max_proxy_bbo_age_ns=max(
+                    self._max_sig_bbo_age_ns, _MAX_REPAIR_TOUCH_AGE_NS,
+                ),
             )
             if state is None or not (self._min_fair_value <= state.pm_mid <= self._max_fair_value):
                 continue
@@ -1449,7 +1453,7 @@ class ResidualTakerLiveCoordinator:
         # This repairs the previous circular exclusion: stale depth required
         # REST refresh but the stale BBO prevented the REST request.
         recovery_age_ns = max(
-            self._max_sig_bbo_age_ns, self._max_sig_stream_depth_age_ns,
+            self._max_sig_bbo_age_ns, _MAX_REPAIR_TOUCH_AGE_NS,
         )
         if bbo_age < 0 or bbo_age > recovery_age_ns:
             return None
