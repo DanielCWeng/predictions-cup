@@ -16,7 +16,8 @@ def test_prioritises_largest_positive_after_cost_edge() -> None:
     top = queue.pick(400)
     assert top is not None and top.exchange_id == "strong"
     assert queue.pick(400) is None
-    assert queue.pick(2_000_000_500) is None
+    next_book = queue.pick(2_000_000_500)
+    assert next_book is not None and next_book.exchange_id == "middle"
 
 
 def test_priority_queue_expiry_and_bound() -> None:
@@ -61,7 +62,8 @@ def test_priority_coalesces_and_does_not_starve_other_markets() -> None:
     second = q.pick(2_100_000_001)
     assert second is not None and second.exchange_id == "b"
     assert q.pick(3_000_000_000) is None
-    assert q.pick(5_500_000_000) is None
+    resumed = q.pick(5_500_000_000)
+    assert resumed is not None and resumed.exchange_id == "a"
 
 
 def test_invalid_scores_rejected_without_queue_growth() -> None:
