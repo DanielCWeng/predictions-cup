@@ -194,3 +194,25 @@ def test_cli_auto_shortlist_is_offline_and_never_authorizes_orders(tmp_path: Pat
     assert not output["execution_authority"]
     assert not output["inputs_trusted"]
     assert output["ranked_opportunities"][0]["name"] == "rotate:sell-a:buy-b"
+
+
+def test_unreachable_podium_does_not_hide_achievable_rank_milestones() -> None:
+    sale = _candidate("sell-a", "a", "SELL", "YES", 50, .6)
+    buy = _candidate("buy-b", "b", "BUY", "YES", 50, .4)
+    result = _rank(
+        (sale, buy), target_balance=1_020_237.91,
+        milestone_targets=((3, 1_020_237.91), (100, 40.0)),
+    )
+    assert result.ranked[0].name == "rotate:sell-a:buy-b"
+    assert result.ranked[0].score.min_probability_improvement == 0
+    assert result.ranked[0].milestone_probability_improvement["3"] == 0
+    assert result.ranked[0].milestone_probability_improvement["100"] == pytest.approx(.2)
+    assert result.ranked[0].score.min_expected_gain == pytest.approx(19)
+
+
+def test_milestone_duplicate_rank_rejected() -> None:
+    with pytest.raises(ValueError, match="milestone"):
+        _rank(
+            (_candidate("s", "a", "SELL", "YES", 50, .6),),
+            milestone_targets=((3, 100.0), (3, 105.0)),
+        )
