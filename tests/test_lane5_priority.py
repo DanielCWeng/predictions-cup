@@ -26,8 +26,27 @@ def test_priority_queue_expiry_and_bound() -> None:
     assert not q.offer("worse", 0.01, 21)
     assert q.offer("better", 0.9, 22)
     assert set(q.pending) == {"b", "better"}
-    assert q.pick(1_300_000_000) is None
+    assert q.pick(4_600_000_000) is None
     assert q.dropped_expired == 2
+
+
+def test_depth_queue_can_service_burst_across_two_second_global_pacing() -> None:
+    q = CandidateDepthQueue()
+    for eid, score in (("first", 3.0), ("second", 2.0), ("third", 1.0)):
+        assert q.offer(eid, score, 1_000_000_000)
+    assert q.pick(1_000_000_000).exchange_id == "first"
+    assert q.pick(2_990_000_000) is None
+    assert q.pick(3_000_000_000).exchange_id == "second"
+    assert q.pick(5_000_000_000).exchange_id == "third"
+    assert q.requests_started == 3
+
+
+def test_stale_depth_candidates_expire_despite_longer_queue_ttl() -> None:
+    q = CandidateDepthQueue()
+    assert q.offer("stale", 1.0, 1_000_000_000)
+    assert q.pick(5_600_000_001) is None
+    assert q.requests_started == 0
+    assert q.dropped_expired == 1
 
 
 def test_priority_coalesces_and_does_not_starve_other_markets() -> None:
