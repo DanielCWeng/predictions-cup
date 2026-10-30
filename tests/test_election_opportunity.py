@@ -11,10 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from predictions_cup.analysis.election_opportunity import (
-    CandidateQuote,
-    rank_opportunities,
-)
+from predictions_cup.analysis.election_opportunity import CandidateQuote, rank_opportunities
 from predictions_cup.analysis.election_terminal import (
     ExecutableTrade,
     Holding,
