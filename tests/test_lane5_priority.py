@@ -235,7 +235,7 @@ def test_proxy_input_has_finite_sig_touch_window_and_exact_book_identity() -> No
             replace(snapshot.runtime.books[0], observed_monotonic_ns=earlier),
         )),
     )
-    def make_state(age_bound: int):
+    def make_state(age_bound: int) -> object:
         return residual_input_from_snapshot(
             matching, RECORD,
             max_pm_book_age_ns=35_000_000_000,
