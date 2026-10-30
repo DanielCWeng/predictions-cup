@@ -47,6 +47,7 @@ from predictions_cup.maker import (
 )
 from predictions_cup.maker import adapters as maker_adapters_module
 from predictions_cup.maker.contracts import FairValueResult
+from predictions_cup.maker.lifecycle import QuoteLifecycleAction
 from predictions_cup.maker.runtime_loop import MakerRuntimeLoop
 from predictions_cup.maker.sources import MakerSourceBridge
 from predictions_cup.mapping.models import (
@@ -3381,9 +3382,9 @@ def _recycle_quote_decision(
     remaining_size: int = 100, desired_size: int = 100,
     force_cancel: bool = False, recycle_side: QuoteSide | None = None,
     state: LifecycleState = LifecycleState.OPEN,
-) -> tuple["QuoteLifecycleAction", ...]:
+) -> tuple[QuoteLifecycleAction, ...]:
     from predictions_cup.maker.contracts import DesiredQuote
-    from predictions_cup.maker.lifecycle import MakerQuoteState, QuoteLifecycleAction
+    from predictions_cup.maker.lifecycle import MakerQuoteState
 
     quote = ActiveQuote(
         side=side, price_ticks=active_ticks, size=100,
