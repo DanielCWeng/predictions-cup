@@ -379,10 +379,9 @@ def test_passive_recycle_targets_held_yes_without_any_entry_candidate() -> None:
     a.observe(snapshot(
         eid="11", market="m11", signed=1000,
         pm_bid=.80, pm_ask=.82, yes_bid=100, yes_ask=164,
-        open_order=True, all_positions=held,
+        all_positions=held,
     ), "token-11")
-    # Identical account order book is needed for allocator fingerprint to
-    # represent a coherent account snapshot.
+    # Both observations use the same complete account/position view.
     a.observe(snapshot(
         eid="22", market="m22", signed=-1000,
         pm_bid=.80, pm_ask=.82, yes_bid=100, yes_ask=164,
