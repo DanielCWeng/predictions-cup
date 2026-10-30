@@ -128,7 +128,7 @@ def test_duplicate_id_and_unbounded_candidate_search_block() -> None:
     candidate = _candidate("one", "a", "SELL", "YES", 50, .6)
     with pytest.raises(ValueError, match="duplicate"):
         _rank((candidate, candidate))
-    with pytest.raises(ValueError, match="search bound"):
+    with pytest.raises(ValueError, match="bounded opportunity search"):
         _rank((candidate,), max_candidates=0)
 
 
