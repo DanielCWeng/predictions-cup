@@ -458,33 +458,38 @@ class LiquidityWeightedAllocator:
     def passive_recycle_targets(
         self, *, now_ns: int, limit: int = 8,
     ) -> frozenset[str]:
-        """Select only existing YES holdings for non-crossing reduction quotes.
+        """Select held YES or NO inventory for normal reduce-only maker quotes.
 
-        This is a maker quote-side preference, not a sell order, a taker
-        permission, or a claim of executable liquidation proceeds. Prefer
-        cash-releasing YES reductions over NO-cover bids (which require cash).
-        No replacement entry is required: the normal maker still prices each
-        resting ASK independently and RISK-002 approves/cancels it.
+        A BUY YES against an existing NO position redeems the paired holdings:
+        the one-SUSQie redemption covers the YES purchase and releases the
+        remaining (1 - YES price) cash. We nominate the NO market only;
+        maker cash checks and central risk must independently prove that the
+        proposed order cannot overshoot the signed NO inventory.
         """
         if limit < 1 or limit > 8:
             raise ValueError("passive recycling must be bounded to 1..8")
         self._expire(now_ns)
         candidates: list[tuple[float, int, str]] = []
         for eid, held in self.exits.items():
-            # An NO cover is a BUY YES and consumes scarce cash. Do not
-            # nominate it as a capital-releasing quote.
-            if held.signed_shares <= 0 or not held.yes_bids:
+            is_yes = held.signed_shares > 0
+            levels = held.yes_bids if is_yes else held.yes_asks
+            if not levels:
                 continue
-            bid = held.yes_bids[0]
-            if bid.shares < 1:
+            best = levels[0]
+            if best.shares < 1:
                 continue
-            # Prefer liquid sizeable holdings where SIG bids are closest to
-            # conservative external value. The maker's separate ASK price,
-            # maker edge checks and central risk still determine actual orders.
-            concession = max(0.0, held.conservative_fair_yes - bid.yes_price)
-            executable = min(held.signed_shares, bid.shares, self.max_trade_shares)
-            score = executable * max(0.0, bid.yes_price - concession)
-            candidates.append((score, executable, eid))
+            executable = min(abs(held.signed_shares), best.shares, self.max_trade_shares)
+            # Sale proceeds in the *held outcome* currency. For NO, covering
+            # at YES ask returns 1 - ask after pair redemption.
+            proceeds = best.yes_price if is_yes else 1 - best.yes_price
+            fair_hold = (
+                held.conservative_fair_yes
+                if is_yes else 1 - held.conservative_fair_yes
+            )
+            concession = max(0.0, fair_hold - proceeds)
+            score = executable * max(0.0, proceeds - concession)
+            if score > 0:
+                candidates.append((score, executable, eid))
         candidates.sort(key=lambda item: (-item[0], -item[1], item[2]))
         return frozenset(eid for _, _, eid in candidates[:limit])
 
