@@ -3381,9 +3381,9 @@ def _recycle_quote_decision(
     remaining_size: int = 100, desired_size: int = 100,
     force_cancel: bool = False, recycle_side: QuoteSide | None = None,
     state: LifecycleState = LifecycleState.OPEN,
-) -> tuple:
+) -> tuple["QuoteLifecycleAction", ...]:
     from predictions_cup.maker.contracts import DesiredQuote
-    from predictions_cup.maker.lifecycle import MakerQuoteState
+    from predictions_cup.maker.lifecycle import MakerQuoteState, QuoteLifecycleAction
 
     quote = ActiveQuote(
         side=side, price_ticks=active_ticks, size=100,
