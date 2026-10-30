@@ -964,6 +964,7 @@ class MakerService:
                                 polymarket_feed_trusted=self._polymarket_feed_trusted(),
                             )
                         )
+                        if taker is not None else None
                     ),
                 )
                 _LOG.info(
