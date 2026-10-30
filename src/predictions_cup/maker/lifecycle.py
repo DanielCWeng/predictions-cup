@@ -106,6 +106,7 @@ class QuoteLifecycleManager:
         current: MakerQuoteState,
         now_monotonic_ns: int,
         force_cancel: bool = False,
+        recycle_side: QuoteSide | None = None,
     ) -> tuple[QuoteLifecycleAction, ...]:
         if now_monotonic_ns < 0:
             raise ValueError("now_monotonic_ns must be non-negative")
@@ -147,6 +148,7 @@ class QuoteLifecycleManager:
                         current=current,
                         now_ns=now_monotonic_ns,
                         force_cancel=force_cancel,
+                        recycle_side=recycle_side,
                     )
                 )
 
@@ -169,6 +171,7 @@ class QuoteLifecycleManager:
                     current=current,
                     now_ns=now_monotonic_ns,
                     force_cancel=force_cancel,
+                    recycle_side=recycle_side,
                 )
                 side_actions.append(replacement)
                 if (
@@ -188,6 +191,7 @@ class QuoteLifecycleManager:
                         current=current,
                         now_ns=now_monotonic_ns,
                         force_cancel=force_cancel,
+                        recycle_side=recycle_side,
                     )
                 )
 
@@ -215,6 +219,7 @@ class QuoteLifecycleManager:
                             current=current,
                             now_ns=now_monotonic_ns,
                             force_cancel=force_cancel,
+                            recycle_side=recycle_side,
                         )
                     )
             if not side_actions:
@@ -239,6 +244,7 @@ class QuoteLifecycleManager:
         current: MakerQuoteState,
         now_ns: int,
         force_cancel: bool,
+        recycle_side: QuoteSide | None,
     ) -> QuoteLifecycleAction:
         wants_quote = desired_ticks is not None and desired_size > 0
 
@@ -297,6 +303,28 @@ class QuoteLifecycleManager:
             )
 
         assert desired_ticks is not None
+        # For a strictly inventory-reducing side, retaining an already
+        # resting quote at a slightly *better* price preserves queue priority
+        # and avoids unnecessary cancel/repost latency. Never retain a worse
+        # price, oversize quote, stale/no-longer-desired quote, unresolved
+        # order, or anything subject to the force-cancel safety path.
+        if (
+            side is recycle_side
+            and 0 < active.remaining_size <= desired_size
+            and 0 <= (
+                active.price_ticks - desired_ticks
+                if side is QuoteSide.ASK else desired_ticks - active.price_ticks
+            ) <= 3
+        ):
+            return QuoteLifecycleAction(
+                QuoteLifecycleActionKind.KEEP,
+                side,
+                "recycle_non_worse_resting_quote",
+                desired_ticks=desired_ticks,
+                desired_size=desired_size,
+                active=active,
+                slot=slot,
+            )
         price_move = abs(desired_ticks - active.price_ticks)
         size_move = abs(desired_size - active.remaining_size)
         material = (
