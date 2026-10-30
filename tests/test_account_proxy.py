@@ -561,3 +561,25 @@ def test_ack_after_snapshot_cutoff_remains_risk_bearing_when_absent() -> None:
     assert len(portfolio.orders) == 1
     assert portfolio.orders[0].reserved_exposure == 10
     assert portfolio.worst_case_inventory_bounds(EXCHANGE, TOURNAMENT) == (0.0, 10.0)
+
+
+def test_unknown_order_update_logs_identity_but_keeps_account_untrusted(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ledger = _ledger(max_age_ns=10_000)
+    ledger.seed_authoritative(_snapshot(), observed_monotonic_ns=1_000)
+    payload = _batch(revision=1, quantity="0", total_cost="0")
+    payload["fills"] = []
+    updates = payload["orderUpdates"]
+    assert isinstance(updates, list)
+    assert isinstance(updates[0], dict)
+    updates[0]["orderId"] = 998877
+    updates[0]["open"] = False
+    ledger.apply_realtime_batch(payload)
+    assert ledger.discrepancy_reason == "order_update_for_unknown_order"
+    assert ledger.trust_grade(account_state_trusted=False, proxy_age_ns=0) is (
+        AccountTrustGrade.UNTRUSTED
+    )
+    assert "order=998877" in caplog.text
+    assert f"exchange={EXCHANGE}" in caplog.text
+    assert "open=False traded=0 total_cost=0" in caplog.text
