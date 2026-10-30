@@ -440,6 +440,8 @@ class ResidualTakerLiveCoordinator:
             and capital.exposure.uncertain_order_exposure == 0
             and not (capital.global_halt is not None and capital.global_halt.active)
         )
+        repair_candidates: list[tuple[float, str]] = []
+        depth_request = getattr(self, "_request_fresh_depth", None)
         for eid in sorted(snapshots):
             if eid not in self._signal.tracked_exchange_ids:
                 continue
@@ -450,6 +452,31 @@ class ResidualTakerLiveCoordinator:
                 self._rotation_preclear_allocator.observe(
                     snapshot, token, risk_state_trusted=risk_ready,
                 )
+            # Only consider a depth read where a *fresh* PM/SIG BBO pair
+            # already clears the unchanged 8pp net-edge threshold. Ordinary
+            # no-edge or risk-blocked books never spend the shared REST budget.
+            if risk_ready and depth_request is not None:
+                reason = allocator.latest_eligibility[eid][1]
+                if reason in {
+                    "sig_depth_stale", "sig_depth_untrusted",
+                    "sig_book_missing_or_untrusted",
+                }:
+                    score = allocator.stale_depth_entry_probe(
+                        snapshot, token,
+                        max_sig_bbo_age_ns=self._max_sig_bbo_age_ns,
+                    )
+                    if score is not None:
+                        repair_candidates.append((score, eid))
+        if depth_request is not None and repair_candidates:
+            for score, eid in sorted(
+                repair_candidates, key=lambda pair: (-pair[0], pair[1]),
+            )[:3]:
+                depth_request(eid, score)
+            _LOG.info(
+                "ROTATION targeted depth scout eligible=%d requested=%d "
+                "REST_DISPATCH=GOVERNED",
+                len(repair_candidates), min(3, len(repair_candidates)),
+            )
 
     def _schedule_rotation_coordinated_recheck(
         self, *, trusted: bool, now_ns: int,
