@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -17,6 +17,8 @@ from predictions_cup.maker.liquidity_allocator import (
 )
 from predictions_cup.maker.residual_live import ResidualTakerLiveCoordinator
 from predictions_cup.maker.residual_taker import ResidualTakerSignal
+from predictions_cup.mapping.models import MappingClass, MappingDirection, MappingStatus
+from predictions_cup.runtime.models import RuntimePosition
 from test_liquidity_allocator import snapshot
 
 
@@ -236,3 +238,101 @@ def test_coordinated_recheck_disabled_without_live_active_rotation() -> None:
         trusted=True, now_ns=30_000_000_000,
     )
     assert requested == []
+
+
+def test_coordinated_sweep_uses_atomic_cache_not_paced_maker_queue() -> None:
+    paced: list[frozenset[str]] = []
+    atomic: list[tuple[frozenset[str], int]] = []
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._rotation_allocator = LiquidityWeightedAllocator()
+    coordinator._signal = cast(
+        ResidualTakerSignal, SimpleNamespace(tracked_exchange_ids=frozenset({"11", "22"})),
+    )
+    coordinator._request_rotation_recheck = paced.append
+    coordinator._rotation_cached_sweep = lambda ids, now: atomic.append((ids, now))
+    coordinator._active_rotation_exits = True
+    coordinator._rotation_last_coordinated_recheck_ns = 0
+    coordinator._rotation_coordinated_rechecks = 0
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=True, now_ns=30_000_000_000,
+    )
+    assert atomic == [(frozenset({"11", "22"}), 30_000_000_000)]
+    assert paced == []
+    assert coordinator._rotation_coordinated_rechecks == 1
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=True, now_ns=31_000_000_000,
+    )
+    coordinator._schedule_rotation_coordinated_recheck(
+        trusted=False, now_ns=46_000_000_000,
+    )
+    assert len(atomic) == 1
+
+
+def test_atomic_cache_refresh_prices_both_sides_without_order_sender() -> None:
+    def mapping(token: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            status=MappingStatus.VERIFIED,
+            mapping_class=MappingClass.EXACT,
+            mapping_direction=MappingDirection.SAME,
+            direct_polymarket=SimpleNamespace(mapped_token_id=token),
+        )
+
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._active_rotation_exits = True
+    coordinator._rotation_allocator = LiquidityWeightedAllocator(min_rotation_gain=0)
+    coordinator._rotation_preclear_allocator = LiquidityWeightedAllocator(
+        min_rotation_gain=0, advisory_include_resting_orders=True,
+    )
+    coordinator._mapping = cast(Any, {
+        "11": mapping("token-11"),
+        "22": mapping("token-22"),
+    })
+    coordinator._signal = cast(
+        ResidualTakerSignal, SimpleNamespace(tracked_exchange_ids=frozenset({"11", "22"})),
+    )
+    capital = SimpleNamespace(
+        account_trusted=True, reconciliation_complete=True, marks_trusted=True,
+        exposure=SimpleNamespace(trusted=True, uncertain_order_exposure=0),
+        global_halt=None,
+    )
+    coordinator._risk_context_source = cast(
+        Any, SimpleNamespace(capital_state=capital, kill_switch=False),
+    )
+    coordinator._kill_switch = cast(Any, SimpleNamespace(active=False))
+    held = (RuntimePosition("11", "m11", "t1", 500, -500),)
+    snapshots = {
+        "11": snapshot(
+            eid="11", market="m11", signed=-500, pm_bid=.80, pm_ask=.82,
+            yes_ask=164, all_positions=held,
+        ),
+        "22": snapshot(
+            eid="22", market="m22", signed=0, pm_bid=.60, pm_ask=.62,
+            yes_ask=106, all_positions=held,
+        ),
+    }
+    # No dispatch, cancel, quote pause, or resting-order sink is wired.
+    coordinator.observe_rotation_cached_batch(snapshots)
+    strict = coordinator._rotation_allocator
+    assert strict is not None
+    assert strict.entries.keys() == {"22"}
+    assert strict.exits.keys() == {"11"}
+    assert strict.rank(now_ns=30_000_000_000)
+    assert coordinator._rotation_preclear_allocator is not None
+    assert coordinator._rotation_preclear_allocator.rank(now_ns=30_000_000_000)
+
+    # On central risk trust loss, no cached proposal remains executable.
+    capital.marks_trusted = False
+    coordinator.observe_rotation_cached_batch(snapshots)
+    assert strict.entries == {} and strict.exits == {}
+    assert coordinator._rotation_preclear_allocator.entries == {}
+
+
+def test_disabled_atomic_sweep_cannot_prime_rotation_cache() -> None:
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    allocator = LiquidityWeightedAllocator()
+    coordinator._rotation_allocator = allocator
+    coordinator._active_rotation_exits = False
+    coordinator.observe_rotation_cached_batch({
+        "11": snapshot(eid="11", pm_bid=.70, pm_ask=.72, yes_ask=106),
+    })
+    assert allocator.observed == 0
