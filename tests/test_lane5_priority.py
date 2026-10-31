@@ -446,7 +446,7 @@ def test_pm_reference_repair_keeps_after_cost_and_discovery_age_guards() -> None
     h.coordinator._request_fresh_reference = request_pm
     signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
     snap = _snapshot(ask=140, pm_bid=.78, pm_ask=.79)
-    for quote_age, bid in ((8_000_000_000, 0.701), (36_000_000_000, 0.78)):
+    for quote_age, bid in ((8_000_000_000, 0.60), (36_000_000_000, 0.78)):
         # Move snapshot clock forward rather than constructing negative timestamps.
         updated = replace(
             snap, now_monotonic_ns=NOW + quote_age,
@@ -456,3 +456,83 @@ def test_pm_reference_repair_keeps_after_cost_and_discovery_age_guards() -> None
             updated, signal, action=OrderAction.BUY,
         )
     assert not calls
+
+
+def test_stale_pm_near_miss_may_only_repair_quote_not_trade() -> None:
+    from test_residual_taker_live import NOW
+    h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
+    requests: list[tuple[str, float]] = []
+
+    def request(token: str, score: float) -> bool:
+        requests.append((token, score))
+        return True
+
+    h.coordinator._request_fresh_reference = request
+    snap = _snapshot(ask=140, pm_bid=.714, pm_ask=.724)
+    stale = replace(snap, external_quotes={
+        TOKEN: replace(snap.external_quotes[TOKEN],
+                       observed_monotonic_ns=NOW - 8_000_000_000),
+    })
+    signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
+    score, reason = h.coordinator._candidate_refresh_assessment(
+        stale, signal, action=OrderAction.BUY,
+        allow_stale_reference_for_get=True,
+    )
+    assert reason == "pm_reference_near_miss"
+    assert score is not None and 0 < score < 0.5
+    # The exact same stale near miss is not an admissible SIG depth request.
+    assert h.coordinator._candidate_refresh_score(
+        stale, signal, action=OrderAction.BUY,
+    ) is None
+    h.run(stale)
+    assert requests and requests[0][0] == TOKEN
+    assert h.coordinator._pm_repair_counts["near_miss_enqueued"] > 0
+    assert not h.plans
+    assert h.coordinator._attempted_orders == 0
+
+
+def test_positive_stale_reference_beats_near_miss_for_get_priority() -> None:
+    from test_residual_taker_live import NOW
+    h = _Harness(economics_gate_enabled=True)
+    signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
+    snap = _snapshot(ask=140, pm_bid=.714, pm_ask=.724)
+    near = replace(snap, external_quotes={
+        TOKEN: replace(snap.external_quotes[TOKEN],
+                       observed_monotonic_ns=NOW - 8_000_000_000),
+    })
+    strong = replace(near, external_quotes={
+        TOKEN: replace(near.external_quotes[TOKEN], best_bid=.78, best_ask=.79),
+    })
+    low, low_reason = h.coordinator._candidate_refresh_assessment(
+        near, signal, action=OrderAction.BUY,
+        allow_stale_reference_for_get=True,
+    )
+    high, high_reason = h.coordinator._candidate_refresh_assessment(
+        strong, signal, action=OrderAction.BUY,
+        allow_stale_reference_for_get=True,
+    )
+    assert low_reason == "pm_reference_near_miss"
+    assert high_reason == "pm_reference_repair"
+    assert low is not None and high is not None and high > low
+    assert high >= 1.0
+
+
+def test_near_miss_must_not_refresh_fresh_quote_or_far_negative_edge() -> None:
+    from test_residual_taker_live import NOW
+    h = _Harness(economics_gate_enabled=True)
+    signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
+    good = _snapshot(ask=140, pm_bid=.714, pm_ask=.724)
+    fresh_score, fresh_reason = h.coordinator._candidate_refresh_assessment(
+        good, signal, action=OrderAction.BUY,
+        allow_stale_reference_for_get=True,
+    )
+    assert fresh_score is None and fresh_reason == "conditional_edge_not_positive"
+    too_weak = replace(good, external_quotes={
+        TOKEN: replace(good.external_quotes[TOKEN], best_bid=.6,
+                       observed_monotonic_ns=NOW - 8_000_000_000),
+    })
+    weak_score, weak_reason = h.coordinator._candidate_refresh_assessment(
+        too_weak, signal, action=OrderAction.BUY,
+        allow_stale_reference_for_get=True,
+    )
+    assert weak_score is None and weak_reason == "conditional_edge_not_positive"
