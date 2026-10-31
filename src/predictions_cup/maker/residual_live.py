@@ -215,6 +215,7 @@ class ResidualTakerLiveCoordinator:
         self._rotation_preclear_allocator = rotation_preclear_allocator
         self._rotation_pause_quotes = rotation_pause_quotes
         self._rotation_last_preclear_rank_ns = 0
+        self._rotation_last_preclear_publish_ns = 0
         self._rotation_preclear_targets: frozenset[str] = frozenset()
         self._rotation_reduce_only_targets = rotation_reduce_only_targets
         self._active_rotation_exits = active_rotation_exits
@@ -420,8 +421,21 @@ class ResidualTakerLiveCoordinator:
         bounded = frozenset(sorted(targets)[:8])
         previous = self._rotation_preclear_targets
         self._rotation_preclear_targets = bounded
-        # Renew the five-second lease on each economically valid observation.
-        pause(bounded, now_ns)
+        # The maker's lease lasts five seconds. Updating an identical lease
+        # on every price tick adds coordinator work but no trading value.
+        # Publish changes immediately, and unchanged nonempty leases every 2s.
+        last_published = getattr(self, "_rotation_last_preclear_publish_ns", 0)
+        if (
+            bounded != previous
+            or (
+                bounded and (
+                    now_ns < last_published
+                    or now_ns - last_published >= 2_000_000_000
+                )
+            )
+        ):
+            pause(bounded, now_ns)
+            self._rotation_last_preclear_publish_ns = now_ns
         if bounded != previous:
             _LOG.info(
                 "ROTATION preclear advisory targets=%s candidates=%d "
