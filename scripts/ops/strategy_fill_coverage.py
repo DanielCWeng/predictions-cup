@@ -72,6 +72,7 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
             """,
             (tournament_id,),
         ):
+            fill_key: tuple[object, ...]
             if fill_id is not None:
                 fill_key = ("fill", str(exchange), str(fill_id))
             else:
