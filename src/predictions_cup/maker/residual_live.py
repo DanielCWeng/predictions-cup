@@ -215,6 +215,7 @@ class ResidualTakerLiveCoordinator:
         self._rotation_preclear_allocator = rotation_preclear_allocator
         self._rotation_pause_quotes = rotation_pause_quotes
         self._rotation_last_preclear_rank_ns = 0
+        self._rotation_last_preclear_publish_ns = 0
         self._rotation_preclear_targets: frozenset[str] = frozenset()
         self._rotation_reduce_only_targets = rotation_reduce_only_targets
         self._active_rotation_exits = active_rotation_exits
@@ -299,6 +300,18 @@ class ResidualTakerLiveCoordinator:
                 len(self._rotation_evidence.history),
             )
             now_ns = monotonic_ns()
+            # This is an independent, read-only explanation for why
+            # economically attractive rotations may not execute: it must
+            # never be fed into strict order admission or quote cancellations.
+            screen = self._rotation_preclear_allocator
+            if screen is not None and screen.shadow_capital_blocked:
+                hypothetical = screen.rank(now_ns=now_ns, limit=3)
+                _LOG.info(
+                    "ROTATION blocked-capital hypothetical count=%d "
+                    "best_gain=%s NO_EXECUTION_PERMISSION",
+                    len(hypothetical),
+                    round(hypothetical[0].gain_susq, 3) if hypothetical else None,
+                )
             _LOG.info(
                 "ROTATION diagnostics strict=%s advisory=%s risk_blocks=%s",
                 self._rotation_allocator.eligibility_report(now_ns),
@@ -408,8 +421,21 @@ class ResidualTakerLiveCoordinator:
         bounded = frozenset(sorted(targets)[:8])
         previous = self._rotation_preclear_targets
         self._rotation_preclear_targets = bounded
-        # Renew the five-second lease on each economically valid observation.
-        pause(bounded, now_ns)
+        # The maker's lease lasts five seconds. Updating an identical lease
+        # on every price tick adds coordinator work but no trading value.
+        # Publish changes immediately, and unchanged nonempty leases every 2s.
+        last_published = getattr(self, "_rotation_last_preclear_publish_ns", 0)
+        if (
+            bounded != previous
+            or (
+                bounded and (
+                    now_ns < last_published
+                    or now_ns - last_published >= 2_000_000_000
+                )
+            )
+        ):
+            pause(bounded, now_ns)
+            self._rotation_last_preclear_publish_ns = now_ns
         if bounded != previous:
             _LOG.info(
                 "ROTATION preclear advisory targets=%s candidates=%d "

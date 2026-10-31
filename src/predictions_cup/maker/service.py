@@ -923,6 +923,7 @@ class MakerService:
                             adverse_haircut=self.settings.residual_taker_adverse_haircut,
                             min_marginal_net_edge=self.settings.residual_taker_min_net_edge,
                             advisory_include_resting_orders=True,
+                            shadow_evaluate_during_capital_block=True,
                         )
                         if self.settings.rotation_active_exits_enabled else None
                     ),

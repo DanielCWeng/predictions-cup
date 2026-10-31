@@ -140,3 +140,70 @@ def test_disabled_preclear_never_requests_maker_cancellations() -> None:
     coordinator._active_rotation_exits = False
     coordinator._publish_rotation_preclear(trusted=True, now_ns=30_000_000_000)
     assert published == []
+
+
+def test_capital_block_collects_shadow_economics_but_no_trading_permission() -> None:
+    held = (RuntimePosition("11", "m11", "t1", 500, -500),)
+    exit_market = allocator_snapshot(
+        eid="11", market="m11", signed=-500,
+        pm_bid=.80, pm_ask=.82, yes_ask=164, all_positions=held,
+    )
+    entry_market = allocator_snapshot(
+        eid="22", market="m22", pm_bid=.60, pm_ask=.62,
+        yes_ask=106, all_positions=held,
+    )
+    strict = LiquidityWeightedAllocator(min_rotation_gain=0)
+    screen = LiquidityWeightedAllocator(
+        min_rotation_gain=0,
+        advisory_include_resting_orders=True,
+        shadow_evaluate_during_capital_block=True,
+    )
+    for allocator in (strict, screen):
+        allocator.observe(exit_market, "token-11", risk_state_trusted=False)
+        allocator.observe(entry_market, "token-22", risk_state_trusted=False)
+    assert strict.rank(now_ns=entry_market.now_monotonic_ns) == ()
+    candidates = screen.rank(now_ns=entry_market.now_monotonic_ns)
+    assert candidates and candidates[0].gain_susq > 0
+    assert screen.shadow_capital_blocked
+    assert screen.eligibility_report(entry_market.now_monotonic_ns)[
+        "shadow_capital_blocked"
+    ] is True
+
+    published: list[frozenset[str]] = []
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._rotation_preclear_allocator = screen
+    coordinator._rotation_pause_quotes = lambda ids, _now: published.append(ids)
+    coordinator._active_rotation_exits = True
+    coordinator._rotation_preclear_targets = frozenset()
+    coordinator._publish_rotation_preclear(
+        trusted=False, now_ns=entry_market.now_monotonic_ns,
+    )
+    assert published == []
+    # All candidates observed while RISK was blocked must be discarded on
+    # the first trusted observation. Both legs then require fresh rechecks.
+    screen.observe(exit_market, "token-11", risk_state_trusted=True)
+    assert not screen.shadow_capital_blocked
+    assert screen.rank(now_ns=entry_market.now_monotonic_ns) == ()
+    screen.observe(entry_market, "token-22", risk_state_trusted=True)
+    assert screen.rank(now_ns=entry_market.now_monotonic_ns)
+
+
+def test_identical_preclear_targets_renew_at_two_second_cadence_only() -> None:
+    _, screen = _advisory_candidates()
+    published: list[frozenset[str]] = []
+    coordinator = object.__new__(ResidualTakerLiveCoordinator)
+    coordinator._rotation_preclear_allocator = screen
+    coordinator._rotation_pause_quotes = lambda ids, _now: published.append(ids)
+    coordinator._active_rotation_exits = True
+    coordinator._rotation_last_preclear_rank_ns = 0
+    coordinator._rotation_preclear_targets = frozenset()
+    coordinator._rotation_pending_entries = {}
+    coordinator._request_rotation_recheck = lambda _ids: None
+    coordinator._publish_rotation_preclear(trusted=True, now_ns=30_000_000_000)
+    coordinator._publish_rotation_preclear(trusted=True, now_ns=31_000_000_000)
+    assert len(published) == 1
+    coordinator._publish_rotation_preclear(trusted=True, now_ns=32_100_000_000)
+    assert len(published) == 2
+    assert published[0] == published[1] == frozenset({"11", "22"})
+    coordinator._publish_rotation_preclear(trusted=False, now_ns=32_100_000_001)
+    assert published[-1] == frozenset()

@@ -100,6 +100,7 @@ class LiquidityWeightedAllocator:
         reprice_slippage_per_leg: float = 0.0025,
         min_rotation_gain: float = 5.0,
         advisory_include_resting_orders: bool = False,
+        shadow_evaluate_during_capital_block: bool = False,
     ) -> None:
         if (
             max_trade_shares < 1 or max_age_ns <= 0 or max_exit_book_age_ns <= 0
@@ -123,6 +124,10 @@ class LiquidityWeightedAllocator:
         self.rotation_buffer = rotation_buffer_per_share + 2 * reprice_slippage_per_leg
         self.min_rotation_gain = min_rotation_gain
         self.advisory_include_resting_orders = advisory_include_resting_orders
+        # ONLY the separately allocated advisory screen may keep non-actionable
+        # economic evidence while central capital is temporarily not ready.
+        self.shadow_evaluate_during_capital_block = shadow_evaluate_during_capital_block
+        self.shadow_capital_blocked = False
         self.blocked_by_orders: set[str] = set()
         self.entries: dict[str, RankedEntry] = {}
         self.exits: dict[str, RankedExit] = {}
@@ -151,6 +156,8 @@ class LiquidityWeightedAllocator:
             "total_observations": self.observed,
             "total_reasons": dict(self.diagnostic_counts.most_common(12)),
             "rank": dict(self.last_rank_diagnostic),
+            "shadow_capital_blocked": self.shadow_capital_blocked,
+            "shadow_only": self.shadow_evaluate_during_capital_block,
         }
 
     def observe(
@@ -173,11 +180,31 @@ class LiquidityWeightedAllocator:
         # RISK-002 must separately certify complete issuer reconciliation.
         # Never retain any apparently actionable proposals through a halt.
         if not risk_state_trusted:
+            if not self.shadow_evaluate_during_capital_block:
+                self.entries.clear()
+                self.exits.clear()
+                self.blocked_by_orders.clear()
+                self._diagnose(eid, snapshot.now_monotonic_ns, "capital_risk_not_ready")
+                return
+            if not self.shadow_capital_blocked:
+                self.entries.clear()
+                self.exits.clear()
+                self.blocked_by_orders.clear()
+                self._positions_fingerprint = None
+                self._open_orders_fingerprint.clear()
+            self.shadow_capital_blocked = True
+            self._diagnose(eid, snapshot.now_monotonic_ns, "capital_risk_not_ready")
+            # May collect local quote economics below for diagnostics, but
+            # NEVER submit an order or clear maker quotes from this state.
+        elif self.shadow_capital_blocked:
+            # Never reuse even young shadow-only candidates after recovery:
+            # wait for fresh, independent market observations of both legs.
             self.entries.clear()
             self.exits.clear()
             self.blocked_by_orders.clear()
-            self._diagnose(eid, snapshot.now_monotonic_ns, "capital_risk_not_ready")
-            return
+            self._positions_fingerprint = None
+            self._open_orders_fingerprint.clear()
+            self.shadow_capital_blocked = False
         # Explicitly disallow the PROXY state and ambiguous outstanding fills.
         if not portfolio.account_trusted or portfolio.trust_grade is not AccountTrustGrade.TRUSTED:
             self.entries.clear()
