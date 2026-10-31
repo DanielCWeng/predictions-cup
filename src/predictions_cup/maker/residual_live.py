@@ -80,6 +80,9 @@ _LOG = logging.getLogger(__name__)
 _LIVENESS_INTERVAL_SECONDS = 60.0
 # GET-only repair probe, NEVER an execution freshness extension.
 _MAX_REPAIR_TOUCH_AGE_NS = 30_000_000_000
+# Probe near-miss stale PM quotes for discovery only. This is *not* a trade EV
+# threshold: all orders still require fresh reference plus original economics.
+_PM_STALE_SCOUT_BAND = 0.05
 
 PlanDispatcher = Callable[[ExecutionPlan], Awaitable[ExecutionEvent]]
 CancelDispatcher = Callable[[ExecutionEnvelope], Awaitable[ExecutionEvent]]
@@ -1527,7 +1530,12 @@ class ResidualTakerLiveCoordinator:
             self._fee_per_share + self._latency_haircut
             + self._adverse_haircut + self._min_net_edge
         )
-        if upper_edge <= 0:
+        stale_near_miss = (
+            allow_stale_reference_for_get
+            and age > self._max_fair_age_ns
+            and -_PM_STALE_SCOUT_BAND <= upper_edge <= 0
+        )
+        if upper_edge <= 0 and not stale_near_miss:
             return None, "conditional_edge_not_positive"
         ref_size = (
             external.best_bid_size if action is OrderAction.BUY
@@ -1546,8 +1554,20 @@ class ResidualTakerLiveCoordinator:
         discount = 0.5 if bbo_age >= self._max_sig_bbo_age_ns else 1.0
         if not snapshot.sig_bbo_trusted:
             discount *= 0.25
+        if stale_near_miss:
+            # This is an exploratory public REST GET, never a live edge.
+            # Positive-edge reference GETs always outrank near misses, and
+            # bounded/round-robin token queue pacing remains unchanged.
+            near_strength = max(
+                0.02, 1.0 + upper_edge / _PM_STALE_SCOUT_BAND,
+            )
+            score = min(0.49, 0.001 * bounded_quantity * discount * near_strength)
+            return score, "pm_reference_near_miss"
+        score = upper_edge * bounded_quantity * discount
+        if allow_stale_reference_for_get and age > self._max_fair_age_ns:
+            score += 1.0  # priority class, NOT an economic expected-value bonus
         return (
-            upper_edge * bounded_quantity * discount,
+            score,
             "pm_reference_repair"
             if age > self._max_fair_age_ns
             else (
@@ -1578,7 +1598,7 @@ class ResidualTakerLiveCoordinator:
         score, reason = self._candidate_refresh_assessment(
             snapshot, signal, action=action, allow_stale_reference_for_get=True,
         )
-        if reason != "pm_reference_repair" or score is None:
+        if reason not in {"pm_reference_repair", "pm_reference_near_miss"} or score is None:
             self._pm_repair_counts["not_plausible_" + reason] += 1
             return False
         record = self._mapping.get(snapshot.exchange_id)
@@ -1587,7 +1607,8 @@ class ResidualTakerLiveCoordinator:
         token_id = record.direct_polymarket.mapped_token_id
         accepted = self._request_fresh_reference(token_id, score)
         self._pm_repair_counts[
-            "enqueued" if accepted is not False else "queue_rejected"
+            ("near_miss_" if reason == "pm_reference_near_miss" else "positive_")
+            + ("enqueued" if accepted is not False else "queue_rejected")
         ] += 1
         return accepted is not False
 
