@@ -46,12 +46,12 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
             """,
             (tournament_id,),
         ):
-            key = str(oid)
+            order_key = str(oid)
             value = None if family is None else str(family)
-            if key in order_families and order_families[key] != value:
-                order_families[key] = None
+            if order_key in order_families and order_families[order_key] != value:
+                order_families[order_key] = None
             else:
-                order_families[key] = value
+                order_families[order_key] = value
 
         groups: dict[str, _Group] = defaultdict(_Group)
         seen: set[tuple[object, ...]] = set()
@@ -73,15 +73,15 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
             (tournament_id,),
         ):
             if fill_id is not None:
-                key = ("fill", str(exchange), str(fill_id))
+                fill_key = ("fill", str(exchange), str(fill_id))
             else:
                 fallback_identities += 1
-                key = ("fallback", str(oid), str(exchange), str(stamp),
-                       str(qty_text), str(price_text))
-            if key in seen:
+                fill_key = ("fallback", str(oid), str(exchange), str(stamp),
+                            str(qty_text), str(price_text))
+            if fill_key in seen:
                 duplicates += 1
                 continue
-            seen.add(key)
+            seen.add(fill_key)
             journal_family = None if family is None else str(family)
             ack_family = order_families.get(str(oid))
             if (
@@ -114,7 +114,7 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
                 "realised_pnl": None,
             }
         total = len(seen)
-        known = sum(int(result[k]["unique_fill_events"]) for k in ("MAKE", "TAKE"))
+        known = groups["MAKE"].fills + groups["TAKE"].fills
         return {
             "source": str(db_path),
             "tournament_id": tournament_id,
