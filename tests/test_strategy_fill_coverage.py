@@ -75,3 +75,30 @@ def test_strategy_fill_coverage_refuses_missing_source(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError):
         fill_coverage(tmp_path / "missing.sqlite3", "cup")
+
+
+def test_submitted_fv_take_and_realtime_take_are_one_strategy_family(
+    tmp_path: Path,
+) -> None:
+    path = _journal(tmp_path)
+    db = sqlite3.connect(path)
+    db.executemany(
+        "INSERT INTO execution_events VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            (8, "op-5", "intent-5", "SUBMISSION", None, "cup",
+             None, None, None, None, None, "FV-TAKE"),
+            (9, "op-5", "intent-5", "ACK", "505", "cup",
+             None, "5", None, None, None, None),
+            (10, "op-5", "intent-5", "REALTIME_FILL", "505", "cup",
+             "2026-10-31T12:00:05Z", "5", "fill-5", "20", ".35", "TAKE"),
+        ],
+    )
+    db.commit()
+    db.close()
+    report = fill_coverage(path, "cup")
+    families = report["by_strategy_family"]
+    assert isinstance(families, dict)
+    assert families["TAKE"]["unique_fill_events"] == 2
+    assert families["TAKE"]["gross_fill_notional"] == "11.00"
+    assert report["conflicting_order_attributions"] == 0
+    assert report["attributable_fill_events"] == 3
