@@ -1577,9 +1577,11 @@ class ResidualTakerLiveCoordinator:
         score, reason = self._candidate_refresh_assessment(
             snapshot, signal, action=action,
         )
-        if reason == "pm_quote_stale":
-            if self._request_pm_repair(snapshot, signal, action=action):
-                return
+        if (
+            reason == "pm_quote_stale"
+            and self._request_pm_repair(snapshot, signal, action=action)
+        ):
+            return
         self._depth_precheck_counts[reason] += 1
         if score is None:
             self._skipped_signals["depth_refresh_precheck_rejected"] += 1
