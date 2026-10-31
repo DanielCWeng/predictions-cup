@@ -148,8 +148,15 @@ def test_precheck_bbo_ttl_is_independent_of_depth_ttl() -> None:
     from test_residual_taker_live import NOW
     h = _Harness(economics_gate_enabled=True)
     h.coordinator._max_sig_bbo_age_ns = 15_000_000_000
-    old_bbo = replace(_snapshot(ask=140, pm_bid=0.75, pm_ask=0.76),
-                      sig_bbo_observed_ns=NOW - 4_000_000_000)
+    current = _snapshot(ask=140, pm_bid=0.75, pm_ask=0.76)
+    old_ns = NOW - 4_000_000_000
+    old_bbo = replace(
+        current,
+        runtime=replace(current.runtime, books=(
+            replace(current.runtime.books[0], observed_monotonic_ns=old_ns),
+        )),
+        sig_bbo_observed_ns=old_ns,
+    )
     score = h.coordinator._candidate_refresh_score(
         old_bbo, cast(ResidualSignal, SimpleNamespace(quantity=50, direction="BUY")),
         action=OrderAction.BUY)
@@ -343,12 +350,16 @@ def test_get_only_untrusted_bbo_requires_same_instrument_and_finite_age() -> Non
             "sig_touch_identity_mismatch",
         ),
         (
-            replace(good, runtime=replace(
-                good.runtime,
-                books=(replace(
-                    good.runtime.books[0], observed_monotonic_ns=NOW - 31_000_000_000,
-                ),),
-            ), sig_bbo_observed_ns=NOW - 31_000_000_000),
+            replace(
+                good,
+                now_monotonic_ns=NOW + 31_000_000_000,
+                external_quotes={
+                    TOKEN: replace(
+                        good.external_quotes[TOKEN],
+                        observed_monotonic_ns=NOW + 31_000_000_000,
+                    ),
+                },
+            ),
             "sig_touch_outside_recovery_window",
         ),
         (
