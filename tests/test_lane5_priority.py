@@ -468,7 +468,7 @@ def test_stale_pm_near_miss_may_only_repair_quote_not_trade() -> None:
         return True
 
     h.coordinator._request_fresh_reference = request
-    snap = _snapshot(ask=140, pm_bid=.714, pm_ask=.724)
+    snap = _snapshot(ask=140, pm_bid=.713, pm_ask=.731)
     stale = replace(snap, external_quotes={
         TOKEN: replace(snap.external_quotes[TOKEN],
                        observed_monotonic_ns=NOW - 8_000_000_000),
