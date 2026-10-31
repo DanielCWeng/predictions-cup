@@ -23,6 +23,16 @@ class _Group:
     notional: Decimal = Decimal("0")
 
 
+def _canonical_family(value: str | None) -> str | None:
+    # Execution envelope / SUBMISSION uses FV-TAKE while realtime fills use
+    # TAKE. They are the same strategy family, not a provenance conflict.
+    if value in {"TAKE", "FV-TAKE"}:
+        return "TAKE"
+    if value == "MAKE":
+        return "MAKE"
+    return None
+
+
 def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
     if not db_path.is_file() or not tournament_id.strip():
         raise ValueError("existing journal and tournament identity are required")
@@ -47,7 +57,7 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
             (tournament_id,),
         ):
             order_key = str(oid)
-            value = None if family is None else str(family)
+            value = _canonical_family(None if family is None else str(family))
             if order_key in order_families and order_families[order_key] != value:
                 order_families[order_key] = None
             else:
@@ -83,7 +93,7 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
                 duplicates += 1
                 continue
             seen.add(fill_key)
-            journal_family = None if family is None else str(family)
+            journal_family = _canonical_family(None if family is None else str(family))
             ack_family = order_families.get(str(oid))
             if (
                 journal_family is not None
