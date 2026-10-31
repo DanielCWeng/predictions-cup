@@ -247,6 +247,7 @@ class ResidualTakerLiveCoordinator:
         # Fixed-size diagnostic: distinguish missing WS corroboration from
         # genuinely old ladders without logging per-candidate hot-path events.
         self._depth_window_counts: Counter[str] = Counter()
+        self._depth_precheck_counts: Counter[str] = Counter()
         self._evaluation_changed = asyncio.Event()
 
     @property
@@ -268,7 +269,8 @@ class ResidualTakerLiveCoordinator:
     def log_heartbeat(self) -> None:
         _LOG.info(
             "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d "
-            "signals=%d attempts=%d cycles=%d skipped=%s depth_windows=%s",
+            "signals=%d attempts=%d cycles=%d skipped=%s depth_windows=%s "
+            "depth_precheck=%s",
             self._evaluated_markets,
             self._candidate_ready_markets,
             self._no_residual_markets,
@@ -277,6 +279,7 @@ class ResidualTakerLiveCoordinator:
             self._evaluation_cycles,
             dict(self._skipped_signals),
             dict(self._depth_window_counts),
+            dict(self._depth_precheck_counts),
         )
         if self._rotation_allocator is not None:
             # Ranking is low-cadence and advisory: no order submission here.
@@ -1427,51 +1430,55 @@ class ResidualTakerLiveCoordinator:
         room = self._max_position - high if action is OrderAction.BUY else self._max_position + low
         return max(0, min(quantity, math.floor(room)))
 
-    def _candidate_refresh_score(
+    def _candidate_refresh_assessment(
         self,
         snapshot: MakerMarketSnapshot,
         signal: ResidualSignal,
         *,
         action: OrderAction,
-    ) -> float | None:
-        """Optimistic AFTER-COST bound before spending one scarce REST read.
+    ) -> tuple[float | None, str]:
+        """Conditional after-cost opportunity bound for a GET-only depth repair.
 
-        Uses trusted/young external bid/ask and SIG best price only. Never
-        claims execution: full depth, account admission and risk are rechecked.
+        A recent scalar touch with an untrusted BBO flag is *not* executable,
+        but can motivate a single governed REST read. Execution still requires
+        new trusted complete depth, independent reference prices, and all risk
+        gates. Strongly down-rank such provisional touches below trusted ones.
         """
         record = self._mapping.get(snapshot.exchange_id)
         book = snapshot.runtime.book(snapshot.exchange_id)
-        if record is None or record.direct_polymarket is None or book is None:
-            return None
-        if not snapshot.sig_bbo_trusted or not book.bids or not book.asks:
-            return None
+        if record is None or record.direct_polymarket is None:
+            return None, "mapping_missing"
+        if book is None or not book.bids or not book.asks:
+            return None, "sig_touch_missing"
+        if (
+            book.market_id != snapshot.market_id
+            or book.tournament_id != snapshot.tournament_id
+            or book.observed_monotonic_ns != snapshot.sig_bbo_observed_ns
+        ):
+            return None, "sig_touch_identity_mismatch"
         bbo_age = snapshot.now_monotonic_ns - snapshot.sig_bbo_observed_ns
-        # The BBO execution TTL is intentionally tighter than the finite
-        # recovery window. A bounded, stale-touch candidate may request ONE
-        # fresh governed REST book, but the old touch never authorises a
-        # trade: _take requires fresh depth and independently rechecks fair.
-        # This repairs the previous circular exclusion: stale depth required
-        # REST refresh but the stale BBO prevented the REST request.
         recovery_age_ns = max(
             self._max_sig_bbo_age_ns, _MAX_REPAIR_TOUCH_AGE_NS,
         )
         if bbo_age < 0 or bbo_age > recovery_age_ns:
-            return None
-        external = snapshot.external_quotes.get(record.direct_polymarket.mapped_token_id)
+            return None, "sig_touch_outside_recovery_window"
+        external = snapshot.external_quotes.get(
+            record.direct_polymarket.mapped_token_id
+        )
         if external is None or not external.trusted:
-            return None
+            return None, "pm_quote_untrusted_or_missing"
         age = snapshot.now_monotonic_ns - external.observed_monotonic_ns
         if age < 0 or age > self._max_fair_age_ns:
-            return None
+            return None, "pm_quote_stale"
         fair = external.best_bid if action is OrderAction.BUY else external.best_ask
         if fair is None or not math.isfinite(fair):
-            return None
+            return None, "pm_executable_touch_missing"
         touch = (
             book.asks[0].price_ticks if action is OrderAction.BUY
             else book.bids[0].price_ticks
         ) * SIG_TICK_PROBABILITY
         if not math.isfinite(touch) or touch < 0 or touch > 1:
-            return None
+            return None, "sig_touch_invalid"
         upper_edge = (
             (fair - touch) if action is OrderAction.BUY else (touch - fair)
         ) - (
@@ -1479,9 +1486,7 @@ class ResidualTakerLiveCoordinator:
             + self._adverse_haircut + self._min_net_edge
         )
         if upper_edge <= 0:
-            return None
-        # A displayed PM touch is NOT infinite size. Do not let a large
-        # signal with only a few PM shares monopolise the scarce REST queue.
+            return None, "conditional_edge_not_positive"
         ref_size = (
             external.best_bid_size if action is OrderAction.BUY
             else external.best_ask_size
@@ -1490,16 +1495,54 @@ class ResidualTakerLiveCoordinator:
             ref_size is None or not math.isfinite(ref_size)
             or ref_size < 1
         ):
-            return None
+            return None, "pm_touch_size_unavailable"
         bounded_quantity = min(signal.quantity, math.floor(ref_size))
         if bounded_quantity < 1:
-            return None
-        # Prefer fresher information when otherwise equal; never turn stale
-        # data into a trade. The score ONLY orders depth-repair GET requests.
-        repair_discount = (
-            0.5 if bbo_age >= self._max_sig_bbo_age_ns else 1.0
+            return None, "conditional_quantity_zero"
+        # Never grant trading authority via a discounted score. Scores are
+        # queue priorities only, under existing rate/TTL/instrument limits.
+        discount = 0.5 if bbo_age >= self._max_sig_bbo_age_ns else 1.0
+        if not snapshot.sig_bbo_trusted:
+            discount *= 0.25
+        return (
+            upper_edge * bounded_quantity * discount,
+            "provisional_untrusted_bbo"
+            if not snapshot.sig_bbo_trusted else "trusted_bbo",
         )
-        return upper_edge * bounded_quantity * repair_discount
+
+    def _candidate_refresh_score(
+        self,
+        snapshot: MakerMarketSnapshot,
+        signal: ResidualSignal,
+        *,
+        action: OrderAction,
+    ) -> float | None:
+        score, _reason = self._candidate_refresh_assessment(
+            snapshot, signal, action=action,
+        )
+        return score
+
+    def _request_depth_repair(
+        self,
+        snapshot: MakerMarketSnapshot,
+        signal: ResidualSignal,
+        *,
+        action: OrderAction,
+    ) -> None:
+        if self._request_fresh_depth is None:
+            return
+        score, reason = self._candidate_refresh_assessment(
+            snapshot, signal, action=action,
+        )
+        self._depth_precheck_counts[reason] += 1
+        if score is None:
+            self._skipped_signals["depth_refresh_precheck_rejected"] += 1
+            return
+        accepted = self._request_fresh_depth(snapshot.exchange_id, score)
+        if accepted is False:
+            self._depth_precheck_counts["not_enqueued"] += 1
+        else:
+            self._depth_precheck_counts["enqueued"] += 1
 
     async def _take(
         self,
@@ -1563,14 +1606,7 @@ class ResidualTakerLiveCoordinator:
                     self._depth_window_counts["older_than_stream_limit"] += 1
             if not (snapshot.sig_depth_trusted and book.trusted_depth):
                 self._skipped_signals["economics_depth_untrusted"] += 1
-                if self._request_fresh_depth is not None:
-                    score = self._candidate_refresh_score(
-                        snapshot, signal, action=action,
-                    )
-                    if score is not None:
-                        self._request_fresh_depth(exchange_id, score)
-                    else:
-                        self._skipped_signals["depth_refresh_precheck_rejected"] += 1
+                self._request_depth_repair(snapshot, signal, action=action)
                 return ()
             depth_ns = snapshot.sig_depth_observed_ns
             if (
@@ -1579,14 +1615,7 @@ class ResidualTakerLiveCoordinator:
                 or snapshot.now_monotonic_ns - depth_ns > depth_age_limit_ns
             ):
                 self._skipped_signals["economics_stale_data"] += 1
-                if self._request_fresh_depth is not None:
-                    score = self._candidate_refresh_score(
-                        snapshot, signal, action=action,
-                    )
-                    if score is not None:
-                        self._request_fresh_depth(exchange_id, score)
-                    else:
-                        self._skipped_signals["depth_refresh_precheck_rejected"] += 1
+                self._request_depth_repair(snapshot, signal, action=action)
                 return ()
         reduce_only = bbo_proxy or snapshot.runtime.portfolio.proxy_active
         held = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)
