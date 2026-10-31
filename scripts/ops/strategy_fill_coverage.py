@@ -11,8 +11,16 @@ import argparse
 import json
 import sqlite3
 from collections import defaultdict
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+
+
+@dataclass
+class _Group:
+    fills: int = 0
+    shares: Decimal = Decimal("0")
+    notional: Decimal = Decimal("0")
 
 
 def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
@@ -45,10 +53,7 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
             else:
                 order_families[key] = value
 
-        groups: dict[str, dict[str, object]] = defaultdict(
-            lambda: {"fills": 0, "shares": Decimal("0"),
-                     "gross_price_times_volume": Decimal("0")}
-        )
+        groups: dict[str, _Group] = defaultdict(_Group)
         seen: set[tuple[object, ...]] = set()
         duplicates = 0
         fallback_identities = 0
@@ -86,24 +91,22 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
                 candidate = journal_family or ack_family
                 group = candidate if candidate in {"MAKE", "TAKE"} else "UNATTRIBUTED"
             row = groups[group]
-            row["fills"] = int(row["fills"]) + 1
+            row.fills += 1
             try:
                 qty, price = abs(Decimal(str(qty_text))), Decimal(str(price_text))
                 if not qty.is_finite() or not price.is_finite() or qty <= 0 or not 0 <= price <= 1:
                     raise InvalidOperation
-                row["shares"] = Decimal(row["shares"]) + qty
-                row["gross_price_times_volume"] = (
-                    Decimal(row["gross_price_times_volume"]) + qty * price
-                )
+                row.shares += qty
+                row.notional += qty * price
             except (InvalidOperation, ValueError, TypeError):
                 missing_economics += 1
         result = {}
         for family in ("MAKE", "TAKE", "UNATTRIBUTED"):
             row = groups[family]
             result[family] = {
-                "unique_fill_events": row["fills"],
-                "quantity_shares": str(row["shares"]),
-                "gross_fill_notional": str(row["gross_price_times_volume"]),
+                "unique_fill_events": row.fills,
+                "quantity_shares": str(row.shares),
+                "gross_fill_notional": str(row.notional),
                 "realised_pnl": None,
             }
         total = len(seen)
