@@ -404,3 +404,49 @@ def test_depth_repair_reports_queue_admission_and_rejections() -> None:
     assert h.coordinator._depth_precheck_counts["not_enqueued"] == 1
     assert h.coordinator._depth_precheck_counts["enqueued"] == 0
     assert not h.plans
+
+
+def test_stale_pm_economic_candidate_requests_pm_get_not_sig_order() -> None:
+    from test_residual_taker_live import NOW, EXCHANGE
+    h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
+    pm_requests: list[tuple[str, float]] = []
+    sig_requests: list[tuple[str, float]] = []
+    h.coordinator._request_fresh_reference = lambda token, score: (
+        pm_requests.append((token, score)) or True
+    )
+    h.coordinator._request_fresh_depth = lambda eid, score: (
+        sig_requests.append((eid, score)) or True
+    )
+    snap = _snapshot(ask=140, pm_bid=.78, pm_ask=.79)
+    stale_pm = replace(snap, external_quotes={
+        TOKEN: replace(snap.external_quotes[TOKEN],
+                       observed_monotonic_ns=NOW - 8_000_000_000),
+    })
+    h.run(stale_pm)
+    assert pm_requests and pm_requests[0][0] == TOKEN
+    assert pm_requests[0][1] > 0
+    assert not sig_requests
+    assert not h.plans
+    assert h.coordinator._attempted_orders == 0
+    assert h.coordinator._skipped_signals["pm_reference_execution_stale"] == 1
+
+
+def test_pm_reference_repair_keeps_after_cost_and_discovery_age_guards() -> None:
+    from test_residual_taker_live import NOW
+    h = _Harness(economics_gate_enabled=True)
+    calls: list[tuple[str, float]] = []
+    h.coordinator._request_fresh_reference = lambda token, score: (
+        calls.append((token, score)) or True
+    )
+    signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
+    snap = _snapshot(ask=140, pm_bid=.78, pm_ask=.79)
+    for quote_age, bid in ((8_000_000_000, 0.701), (36_000_000_000, 0.78)):
+        # Move snapshot clock forward rather than constructing negative timestamps.
+        updated = replace(
+            snap, now_monotonic_ns=NOW + quote_age,
+            external_quotes={TOKEN: replace(snap.external_quotes[TOKEN], best_bid=bid)},
+        )
+        assert not h.coordinator._request_pm_repair(
+            updated, signal, action=OrderAction.BUY,
+        )
+    assert not calls
