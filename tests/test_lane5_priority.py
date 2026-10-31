@@ -411,12 +411,16 @@ def test_stale_pm_economic_candidate_requests_pm_get_not_sig_order() -> None:
     h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
     pm_requests: list[tuple[str, float]] = []
     sig_requests: list[tuple[str, float]] = []
-    h.coordinator._request_fresh_reference = lambda token, score: (
-        pm_requests.append((token, score)) or True
-    )
-    h.coordinator._request_fresh_depth = lambda eid, score: (
-        sig_requests.append((eid, score)) or True
-    )
+    def request_pm(token: str, score: float) -> bool:
+        pm_requests.append((token, score))
+        return True
+
+    def request_sig(eid: str, score: float) -> bool:
+        sig_requests.append((eid, score))
+        return True
+
+    h.coordinator._request_fresh_reference = request_pm
+    h.coordinator._request_fresh_depth = request_sig
     snap = _snapshot(ask=140, pm_bid=.78, pm_ask=.79)
     stale_pm = replace(snap, external_quotes={
         TOKEN: replace(snap.external_quotes[TOKEN],
@@ -435,9 +439,11 @@ def test_pm_reference_repair_keeps_after_cost_and_discovery_age_guards() -> None
     from test_residual_taker_live import NOW
     h = _Harness(economics_gate_enabled=True)
     calls: list[tuple[str, float]] = []
-    h.coordinator._request_fresh_reference = lambda token, score: (
-        calls.append((token, score)) or True
-    )
+    def request_pm(token: str, score: float) -> bool:
+        calls.append((token, score))
+        return True
+
+    h.coordinator._request_fresh_reference = request_pm
     signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
     snap = _snapshot(ask=140, pm_bid=.78, pm_ask=.79)
     for quote_age, bid in ((8_000_000_000, 0.701), (36_000_000_000, 0.78)):
