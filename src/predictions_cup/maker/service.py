@@ -1032,18 +1032,21 @@ class MakerService:
                                 chosen.exchange_id, type(exc).__name__,
                             )
 
-                def request_candidate_book(exchange_id: str, score: float) -> None:
+                def request_candidate_book(exchange_id: str, score: float) -> bool:
                     nonlocal candidate_worker_task
                     if not sig_state.health.connected:
-                        return
+                        return False
                     state = sig_state.states.get(exchange_id)
                     if state is None or not state.tracked:
-                        return
-                    if (candidate_depth_queue.offer(exchange_id, score, monotonic_ns())
-                            and (candidate_worker_task is None or candidate_worker_task.done())):
-                            candidate_worker_task = asyncio.create_task(
-                                candidate_book_worker(), name="take-priority-depth",
-                            )
+                        return False
+                    accepted = candidate_depth_queue.offer(
+                        exchange_id, score, monotonic_ns(),
+                    )
+                    if accepted and (candidate_worker_task is None or candidate_worker_task.done()):
+                        candidate_worker_task = asyncio.create_task(
+                            candidate_book_worker(), name="take-priority-depth",
+                        )
+                    return accepted
 
                 taker._request_fresh_depth = request_candidate_book
                 _LOG.warning("RESIDUAL-TAKER-001 LIVE enabled")
