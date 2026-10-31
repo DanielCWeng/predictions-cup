@@ -299,6 +299,18 @@ class ResidualTakerLiveCoordinator:
                 len(self._rotation_evidence.history),
             )
             now_ns = monotonic_ns()
+            # This is an independent, read-only explanation for why
+            # economically attractive rotations may not execute: it must
+            # never be fed into strict order admission or quote cancellations.
+            screen = self._rotation_preclear_allocator
+            if screen is not None and screen.shadow_capital_blocked:
+                hypothetical = screen.rank(now_ns=now_ns, limit=3)
+                _LOG.info(
+                    "ROTATION blocked-capital hypothetical count=%d "
+                    "best_gain=%s NO_EXECUTION_PERMISSION",
+                    len(hypothetical),
+                    round(hypothetical[0].gain_susq, 3) if hypothetical else None,
+                )
             _LOG.info(
                 "ROTATION diagnostics strict=%s advisory=%s risk_blocks=%s",
                 self._rotation_allocator.eligibility_report(now_ns),
