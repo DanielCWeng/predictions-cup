@@ -407,7 +407,7 @@ def test_depth_repair_reports_queue_admission_and_rejections() -> None:
 
 
 def test_stale_pm_economic_candidate_requests_pm_get_not_sig_order() -> None:
-    from test_residual_taker_live import NOW, EXCHANGE
+    from test_residual_taker_live import NOW
     h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
     pm_requests: list[tuple[str, float]] = []
     sig_requests: list[tuple[str, float]] = []
