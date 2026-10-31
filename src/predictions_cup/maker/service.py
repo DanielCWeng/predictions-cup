@@ -983,6 +983,79 @@ class MakerService:
                 candidate_depth_queue = CandidateDepthQueue(max_pending=12)
                 candidate_book_recent_ms: list[float] = []
                 candidate_worker_task: asyncio.Task[None] | None = None
+                # Independent public PM CLOB GET lane: only a stale, still
+                # economically plausible quote can enter. Same bounded
+                # global/per-token pacing and TTL as governed SIG depth, with
+                # no order-write capability and at most one in-flight GET.
+                candidate_pm_queue = CandidateDepthQueue(max_pending=8)
+                candidate_pm_task: asyncio.Task[None] | None = None
+                candidate_pm_fenced = 0
+                candidate_pm_adopted = 0
+
+                async def candidate_pm_worker() -> None:
+                    nonlocal candidate_pm_fenced, candidate_pm_adopted
+                    while candidate_pm_queue.pending and self._polymarket_feed_trusted():
+                        chosen = candidate_pm_queue.pick(monotonic_ns())
+                        if chosen is None:
+                            await asyncio.sleep(0.05)
+                            continue
+                        request_started = datetime.now(UTC)
+                        try:
+                            # Public market data, single mapped token, bounded
+                            # latency; not coupled to SIG account REST budget.
+                            batches = await asyncio.wait_for(
+                                self.pm_clob.fetch_book_batches((chosen.exchange_id,)),
+                                timeout=6.0,
+                            )
+                            accepted = False
+                            if self._polymarket_feed_trusted():
+                                for batch in batches:
+                                    for payload in batch.books:
+                                        token_id = _pm_single_token(payload)
+                                        if token_id != chosen.exchange_id:
+                                            continue
+                                        updated = self.pm_books.apply_fenced_rest_snapshot(
+                                            payload, batch.observed_at, request_started,
+                                        )
+                                        if updated == chosen.exchange_id:
+                                            accepted = True
+                                            candidate_pm_adopted += 1
+                                            if runtime is not None:
+                                                runtime.notify_polymarket(
+                                                    {updated}, observed_monotonic_ns=monotonic_ns(),
+                                                )
+                            if not accepted:
+                                candidate_pm_fenced += 1
+                            if (candidate_pm_queue.requests_started == 1
+                                    or candidate_pm_queue.requests_started % 25 == 0):
+                                _LOG.info(
+                                    "TAKE PM reference repair adopted=%s token=%s "
+                                    "requests=%d accepted=%d fenced=%d expired=%d",
+                                    accepted, chosen.exchange_id,
+                                    candidate_pm_queue.requests_started,
+                                    candidate_pm_adopted, candidate_pm_fenced,
+                                    candidate_pm_queue.dropped_expired,
+                                )
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            _LOG.warning(
+                                "TAKE PM reference repair failed token=%s error=%s",
+                                chosen.exchange_id, type(exc).__name__,
+                            )
+
+                def request_candidate_pm(token_id: str, score: float) -> bool:
+                    nonlocal candidate_pm_task
+                    if not self._polymarket_feed_trusted() or token_id not in self._pm_token_ids:
+                        return False
+                    accepted = candidate_pm_queue.offer(token_id, score, monotonic_ns())
+                    if accepted and (candidate_pm_task is None or candidate_pm_task.done()):
+                        candidate_pm_task = asyncio.create_task(
+                            candidate_pm_worker(), name="take-pm-reference-repair",
+                        )
+                    return accepted
+
+                taker._request_fresh_reference = request_candidate_pm
 
                 async def candidate_book_worker() -> None:
                     # Exactly ONE worker; 1.2s TTL drops candidates that waited

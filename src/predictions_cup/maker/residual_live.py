@@ -160,6 +160,7 @@ class ResidualTakerLiveCoordinator:
         max_sig_stream_depth_age_ns: int = 15_000_000_000,
         max_fair_age_ns: int = 5_000_000_000,
         request_fresh_depth: Callable[[str, float], bool | None] | None = None,
+        request_fresh_reference: Callable[[str, float], bool | None] | None = None,
         rotation_allocator: LiquidityWeightedAllocator | None = None,
         rotation_preclear_allocator: LiquidityWeightedAllocator | None = None,
         rotation_pause_quotes: Callable[[frozenset[str], int], None] | None = None,
@@ -209,6 +210,7 @@ class ResidualTakerLiveCoordinator:
         self._max_sig_stream_depth_age_ns = max_sig_stream_depth_age_ns
         self._max_fair_age_ns = max_fair_age_ns
         self._request_fresh_depth = request_fresh_depth
+        self._request_fresh_reference = request_fresh_reference
         self._rotation_allocator = rotation_allocator
         self._rotation_preclear_allocator = rotation_preclear_allocator
         self._rotation_pause_quotes = rotation_pause_quotes
@@ -248,6 +250,7 @@ class ResidualTakerLiveCoordinator:
         # genuinely old ladders without logging per-candidate hot-path events.
         self._depth_window_counts: Counter[str] = Counter()
         self._depth_precheck_counts: Counter[str] = Counter()
+        self._pm_repair_counts: Counter[str] = Counter()
         self._evaluation_changed = asyncio.Event()
 
     @property
@@ -270,7 +273,7 @@ class ResidualTakerLiveCoordinator:
         _LOG.info(
             "TAKE heartbeat evaluated=%d candidate_ready=%d no_residual=%d "
             "signals=%d attempts=%d cycles=%d skipped=%s depth_windows=%s "
-            "depth_precheck=%s",
+            "depth_precheck=%s pm_repair=%s",
             self._evaluated_markets,
             self._candidate_ready_markets,
             self._no_residual_markets,
@@ -280,6 +283,7 @@ class ResidualTakerLiveCoordinator:
             dict(self._skipped_signals),
             dict(self._depth_window_counts),
             dict(self._depth_precheck_counts),
+            dict(self._pm_repair_counts),
         )
         if self._rotation_allocator is not None:
             # Ranking is low-cadence and advisory: no order submission here.
@@ -1436,6 +1440,7 @@ class ResidualTakerLiveCoordinator:
         signal: ResidualSignal,
         *,
         action: OrderAction,
+        allow_stale_reference_for_get: bool = False,
     ) -> tuple[float | None, str]:
         """Conditional after-cost opportunity bound for a GET-only depth repair.
 
@@ -1475,7 +1480,11 @@ class ResidualTakerLiveCoordinator:
         if external is None or not external.trusted:
             return None, "pm_quote_untrusted_or_missing"
         age = snapshot.now_monotonic_ns - external.observed_monotonic_ns
-        if age < 0 or age > self._max_fair_age_ns:
+        max_age = (
+            max(self._max_fair_age_ns, self._max_pm_book_age_ns)
+            if allow_stale_reference_for_get else self._max_fair_age_ns
+        )
+        if age < 0 or age > max_age:
             return None, "pm_quote_stale"
         fair = external.best_bid if action is OrderAction.BUY else external.best_ask
         if fair is None or not math.isfinite(fair):
@@ -1513,8 +1522,12 @@ class ResidualTakerLiveCoordinator:
             discount *= 0.25
         return (
             upper_edge * bounded_quantity * discount,
-            "provisional_untrusted_bbo"
-            if not snapshot.sig_bbo_trusted else "trusted_bbo",
+            "pm_reference_repair"
+            if age > self._max_fair_age_ns
+            else (
+                "provisional_untrusted_bbo"
+                if not snapshot.sig_bbo_trusted else "trusted_bbo"
+            ),
         )
 
     def _candidate_refresh_score(
@@ -1529,6 +1542,29 @@ class ResidualTakerLiveCoordinator:
         )
         return score
 
+    def _request_pm_repair(
+        self, snapshot: MakerMarketSnapshot, signal: ResidualSignal,
+        *, action: OrderAction,
+    ) -> bool:
+        """Only a bounded GET request; stale PM evidence never authorises a trade."""
+        if self._request_fresh_reference is None:
+            return False
+        score, reason = self._candidate_refresh_assessment(
+            snapshot, signal, action=action, allow_stale_reference_for_get=True,
+        )
+        if reason != "pm_reference_repair" or score is None:
+            self._pm_repair_counts["not_plausible_" + reason] += 1
+            return False
+        record = self._mapping.get(snapshot.exchange_id)
+        if record is None or record.direct_polymarket is None:
+            return False
+        token_id = record.direct_polymarket.mapped_token_id
+        accepted = self._request_fresh_reference(token_id, score)
+        self._pm_repair_counts[
+            "enqueued" if accepted is not False else "queue_rejected"
+        ] += 1
+        return accepted is not False
+
     def _request_depth_repair(
         self,
         snapshot: MakerMarketSnapshot,
@@ -1541,6 +1577,11 @@ class ResidualTakerLiveCoordinator:
         score, reason = self._candidate_refresh_assessment(
             snapshot, signal, action=action,
         )
+        if (
+            reason == "pm_quote_stale"
+            and self._request_pm_repair(snapshot, signal, action=action)
+        ):
+            return
         self._depth_precheck_counts[reason] += 1
         if score is None:
             self._skipped_signals["depth_refresh_precheck_rejected"] += 1
@@ -1623,6 +1664,21 @@ class ResidualTakerLiveCoordinator:
             ):
                 self._skipped_signals["economics_stale_data"] += 1
                 self._request_depth_repair(snapshot, signal, action=action)
+                return ()
+        # A fresh SIG book paired with an older PM quote is not tradeable,
+        # but can justify a fresh bounded PM GET if the stale quote still
+        # suggests sufficient after-cost edge. Never extend execution TTL.
+        record_for_pm = self._mapping.get(exchange_id)
+        if record_for_pm is not None and record_for_pm.direct_polymarket is not None:
+            pm_quote = snapshot.external_quotes.get(
+                record_for_pm.direct_polymarket.mapped_token_id
+            )
+            if pm_quote is not None and (
+                snapshot.now_monotonic_ns - pm_quote.observed_monotonic_ns
+                > self._max_fair_age_ns
+            ):
+                self._request_pm_repair(snapshot, signal, action=action)
+                self._skipped_signals["pm_reference_execution_stale"] += 1
                 return ()
         reduce_only = bbo_proxy or snapshot.runtime.portfolio.proxy_active
         held = self._reservations.overlay_portfolio(snapshot.runtime.portfolio)

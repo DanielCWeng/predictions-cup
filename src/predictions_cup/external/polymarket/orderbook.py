@@ -110,6 +110,35 @@ class OrderBookStore:
         )
         return token_id
 
+    def apply_fenced_rest_snapshot(
+        self, payload: JsonObject, observed_at: datetime, request_started_at: datetime,
+    ) -> str | None:
+        """Adopt a targeted REST book only when no newer WS event could be lost.
+
+        The REST request and WS subscription overlap. A WS book/delta received
+        after request_started_at may be newer than the REST snapshot even if
+        the HTTP response arrived last. Never overwrite that streaming update.
+        The market identity must also remain stable across the refresh.
+        """
+        event = _unwrap_market_event(payload)
+        token_id = require_text(event.get("asset_id") or event.get("tokenId"), "asset_id")
+        market_id = require_text(event.get("market"), "market")
+        current = self._books.get(token_id)
+        if current is None or current.market_id != market_id:
+            return None
+        start = request_started_at.astimezone(UTC)
+        observed = observed_at.astimezone(UTC)
+        if observed < start or current.observed_at > start:
+            return None
+        source_ts = parse_source_timestamp(event.get("timestamp"))
+        if (
+            source_ts is not None
+            and current.source_timestamp is not None
+            and source_ts < current.source_timestamp
+        ):
+            return None
+        return self.apply_full_snapshot(payload, observed_at)
+
     def apply_price_change(self, payload: JsonObject, observed_at: datetime) -> DeltaResult:
         event = _unwrap_market_event(payload)
         changes_raw = event.get("price_changes") or event.get("priceChanges")

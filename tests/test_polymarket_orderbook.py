@@ -470,3 +470,59 @@ def test_unseeded_price_deltas_validate_without_polluting_price_caches(
             observed,
         )
     assert store.resident_level_counts() == (0, 0)
+
+
+def test_targeted_rest_reference_fence_cannot_overwrite_newer_ws_delta() -> None:
+    t0 = datetime(2026, 10, 31, 12, tzinfo=UTC)
+    book = {"asset_id": "token-1", "market": "market-1",
+            "bids": [{"price": "0.65", "size": "50"}],
+            "asks": [{"price": "0.66", "size": "50"}]}
+    store = OrderBookStore()
+    store.apply_full_snapshot(book, t0)
+    request_start = t0 + timedelta(seconds=1)
+    store.apply_price_change(
+        {"price_changes": [{
+            "asset_id": "token-1", "side": "BUY",
+            "price": "0.70", "size": "20",
+        }]}, request_start + timedelta(milliseconds=100),
+    )
+    assert store.apply_fenced_rest_snapshot(
+        book, request_start + timedelta(seconds=2), request_start,
+    ) is None
+    current = store.snapshot("token-1", 1)
+    assert current is not None and current.best_bid == Decimal("0.70")
+
+
+def test_targeted_rest_reference_fence_accepts_quiet_matching_market() -> None:
+    t0 = datetime(2026, 10, 31, 12, tzinfo=UTC)
+    store = OrderBookStore()
+    old = {"asset_id": "token-1", "market": "market-1",
+           "bids": [{"price": "0.65", "size": "50"}],
+           "asks": [{"price": "0.66", "size": "50"}]}
+    store.apply_full_snapshot(old, t0)
+    new = {**old, "bids": [{"price": "0.70", "size": "50"}]}
+    start = t0 + timedelta(seconds=1)
+    assert store.apply_fenced_rest_snapshot(
+        new, start + timedelta(seconds=1), start,
+    ) == "token-1"
+    current = store.snapshot("token-1", 1)
+    assert current is not None and current.best_bid == Decimal("0.70")
+
+
+def test_targeted_rest_reference_fence_rejects_wrong_market_and_missing_token() -> None:
+    t0 = datetime(2026, 10, 31, 12, tzinfo=UTC)
+    store = OrderBookStore()
+    old = {"asset_id": "token-1", "market": "market-1",
+           "bids": [{"price": "0.65", "size": "50"}],
+           "asks": [{"price": "0.66", "size": "50"}]}
+    store.apply_full_snapshot(old, t0)
+    start = t0 + timedelta(seconds=1)
+    assert store.apply_fenced_rest_snapshot(
+        {**old, "market": "market-2"}, start + timedelta(seconds=1), start,
+    ) is None
+    assert store.apply_fenced_rest_snapshot(
+        {**old, "asset_id": "unknown"}, start + timedelta(seconds=1), start,
+    ) is None
+    current = store.snapshot("token-1", 1)
+    assert current is not None and current.market_id == "market-1"
+    assert store.snapshot("unknown", 1) is None
