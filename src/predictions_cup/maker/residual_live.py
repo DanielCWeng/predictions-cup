@@ -159,7 +159,7 @@ class ResidualTakerLiveCoordinator:
         max_sig_depth_age_ns: int = 1_500_000_000,
         max_sig_stream_depth_age_ns: int = 15_000_000_000,
         max_fair_age_ns: int = 5_000_000_000,
-        request_fresh_depth: Callable[[str, float], None] | None = None,
+        request_fresh_depth: Callable[[str, float], bool | None] | None = None,
         rotation_allocator: LiquidityWeightedAllocator | None = None,
         rotation_preclear_allocator: LiquidityWeightedAllocator | None = None,
         rotation_pause_quotes: Callable[[frozenset[str], int], None] | None = None,
@@ -1446,7 +1446,14 @@ class ResidualTakerLiveCoordinator:
         """
         record = self._mapping.get(snapshot.exchange_id)
         book = snapshot.runtime.book(snapshot.exchange_id)
-        if record is None or record.direct_polymarket is None:
+        if (
+            record is None
+            or record.mapping_class is not MappingClass.EXACT
+            or record.mapping_direction is not MappingDirection.SAME
+            or record.status is not MappingStatus.VERIFIED
+            or record.sig_market_id != snapshot.market_id
+            or record.direct_polymarket is None
+        ):
             return None, "mapping_missing"
         if book is None or not book.bids or not book.asks:
             return None, "sig_touch_missing"
