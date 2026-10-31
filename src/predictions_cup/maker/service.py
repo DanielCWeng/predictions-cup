@@ -1020,9 +1020,10 @@ class MakerService:
                                         if updated == chosen.exchange_id:
                                             accepted = True
                                             candidate_pm_adopted += 1
-                                            runtime.notify_polymarket(
-                                                {updated}, observed_monotonic_ns=monotonic_ns(),
-                                            )
+                                            if runtime is not None:
+                                                runtime.notify_polymarket(
+                                                    {updated}, observed_monotonic_ns=monotonic_ns(),
+                                                )
                             if not accepted:
                                 candidate_pm_fenced += 1
                             if (candidate_pm_queue.requests_started == 1
