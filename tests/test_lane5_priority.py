@@ -92,10 +92,12 @@ def test_precheck_only_spends_rest_for_fresh_conservative_positive_bound() -> No
     assert h.coordinator._candidate_refresh_score(
         stale, signal, action=OrderAction.BUY,
     ) is None
+    # Untrusted *recent* BBO can justify only a discounted REST GET,
+    # never execution. Previously this blocked restoration of trusted depth.
     bad_bbo = replace(snap, sig_bbo_trusted=False)
     assert h.coordinator._candidate_refresh_score(
         bad_bbo, signal, action=OrderAction.BUY,
-    ) is None
+    ) == expected * 0.25
 
 
 def test_untrusted_depth_recheck_requests_only_profitable_candidates() -> None:
@@ -294,4 +296,100 @@ def test_actual_west_15s_bbo_limit_can_refresh_20s_old_touch_but_never_trade() -
     )
     h.run(beyond, sequence=2)
     assert len(refreshed) == 1
+    assert not h.plans
+
+
+def test_recent_untrusted_bbo_repair_is_get_only_and_downranked() -> None:
+    h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
+    requests: list[tuple[str, float]] = []
+    h.coordinator._request_fresh_depth = (
+        lambda eid, score: requests.append((eid, score))
+    )
+    snapshot = _snapshot(ask=140, pm_bid=.77, pm_ask=.78)
+    untrusted = replace(
+        snapshot, sig_bbo_trusted=False, sig_depth_trusted=False,
+    )
+    signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
+    score, reason = h.coordinator._candidate_refresh_assessment(
+        untrusted, signal, action=OrderAction.BUY,
+    )
+    trusted_score, _ = h.coordinator._candidate_refresh_assessment(
+        snapshot, signal, action=OrderAction.BUY,
+    )
+    assert score is not None and trusted_score is not None
+    assert score == trusted_score * 0.25
+    assert reason == "provisional_untrusted_bbo"
+    h.run(untrusted)
+    assert requests and requests[0][1] > 0
+    assert not h.plans
+    assert h.coordinator._attempted_orders == 0
+    assert h.coordinator._depth_precheck_counts["provisional_untrusted_bbo"] == 1
+
+
+def test_get_only_untrusted_bbo_requires_same_instrument_and_finite_age() -> None:
+    from test_residual_taker_live import NOW
+    h = _Harness(economics_gate_enabled=True, allow_bbo_proxy=True)
+    good = replace(
+        _snapshot(ask=140, pm_bid=.77, pm_ask=.78),
+        sig_bbo_trusted=False, sig_depth_trusted=False,
+    )
+    signal = cast(ResidualSignal, SimpleNamespace(direction="BUY", quantity=50))
+    for snap, expected_reason in [
+        (
+            replace(good, runtime=replace(
+                good.runtime,
+                books=(replace(good.runtime.books[0], market_id="wrong"),),
+            )),
+            "sig_touch_identity_mismatch",
+        ),
+        (
+            replace(good, runtime=replace(
+                good.runtime,
+                books=(replace(
+                    good.runtime.books[0], observed_monotonic_ns=NOW - 31_000_000_000,
+                ),),
+            ), sig_bbo_observed_ns=NOW - 31_000_000_000),
+            "sig_touch_outside_recovery_window",
+        ),
+        (
+            replace(good, external_quotes={
+                TOKEN: replace(
+                    good.external_quotes[TOKEN], observed_monotonic_ns=1,
+                ),
+            }),
+            "pm_quote_stale",
+        ),
+        (
+            replace(good, external_quotes={
+                TOKEN: replace(
+                    good.external_quotes[TOKEN], best_bid_size=0.5,
+                ),
+            }),
+            "pm_touch_size_unavailable",
+        ),
+        (
+            replace(good, external_quotes={
+                TOKEN: replace(
+                    good.external_quotes[TOKEN], best_bid=0.70,
+                ),
+            }),
+            "conditional_edge_not_positive",
+        ),
+    ]:
+        result, reason = h.coordinator._candidate_refresh_assessment(
+            snap, signal, action=OrderAction.BUY,
+        )
+        assert result is None and reason == expected_reason
+
+
+def test_depth_repair_reports_queue_admission_and_rejections() -> None:
+    h = _Harness(economics_gate_enabled=True)
+    snap = replace(
+        _snapshot(pm_bid=.75, pm_ask=.76), sig_depth_trusted=False,
+    )
+    h.coordinator._request_fresh_depth = lambda _eid, _score: False
+    h.run(snap)
+    assert h.coordinator._depth_precheck_counts["trusted_bbo"] == 1
+    assert h.coordinator._depth_precheck_counts["not_enqueued"] == 1
+    assert h.coordinator._depth_precheck_counts["enqueued"] == 0
     assert not h.plans
