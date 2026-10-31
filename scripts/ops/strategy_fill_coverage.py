@@ -84,7 +84,11 @@ def fill_coverage(db_path: Path, tournament_id: str) -> dict[str, object]:
             seen.add(key)
             journal_family = None if family is None else str(family)
             ack_family = order_families.get(str(oid))
-            if journal_family is not None and ack_family is not None and journal_family != ack_family:
+            if (
+                journal_family is not None
+                and ack_family is not None
+                and journal_family != ack_family
+            ):
                 conflicted += 1
                 group = "UNATTRIBUTED"
             else:
